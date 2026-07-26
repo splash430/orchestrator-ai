@@ -93,7 +93,7 @@ export const deployWorker = createServerFn({ method: "POST" })
             env: "docker",
             region: "oregon",
             plan: "starter",
-            runtime: "image",
+            runtime: "docker",
             dockerfilePath: "./worker/Dockerfile",
             dockerContext: "./worker",
             envSpecificDetails: {
