@@ -16,11 +16,19 @@ export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
       { title: "Operator — AI browser control" },
+      { property: "og:title", content: "Operator — AI browser control" },
       {
         name: "description",
         content:
           "Chat interface that turns your commands into real headless-browser actions via Claude.",
       },
+      {
+        property: "og:description",
+        content:
+          "Chat interface that turns your commands into real headless-browser actions via Claude.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ChatPage,
@@ -432,6 +440,11 @@ function WorkerStatusPanel() {
   const deployWorkerFn = useServerFn(deployWorker);
   const refreshWorkerFn = useServerFn(refreshWorker);
 
+  function cleanRepoInput(value: string) {
+    const match = value.match(/https?:\/\/(?:www\.)?(?:github|gitlab)\.com\/[^\s/]+\/[^\s/]+/i);
+    return (match?.[0] ?? value).trim().replace(/\.git$/i, "").replace(/\/+$/, "");
+  }
+
   useEffect(() => {
     getWorkerStatusFn().then(setStatus).catch(() => setStatus({ status: "not_deployed" }));
   }, [getWorkerStatusFn]);
@@ -445,11 +458,16 @@ function WorkerStatusPanel() {
   }, [status?.status, refreshWorkerFn]);
 
   async function deploy() {
-    if (!repoUrl.trim()) return;
+    const cleanedRepoUrl = cleanRepoInput(repoUrl);
+    if (!cleanedRepoUrl) return;
+    setRepoUrl(cleanedRepoUrl);
     setBusy(true);
     setErr(null);
     try {
-      await deployWorkerFn({ data: { repoUrl: repoUrl.trim() } });
+      const result = await deployWorkerFn({ data: { repoUrl: cleanedRepoUrl } });
+      if (!result.ok) {
+        setErr(result.error);
+      }
       const s = await getWorkerStatusFn();
       setStatus(s);
     } catch (e) {

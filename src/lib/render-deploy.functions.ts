@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { createWorkerService, getRenderService, normalizeRepoUrl } from "@/lib/render-deploy.server";
 
 // Deploys / provisions the Playwright worker on Render using the user's
 // RENDER_API_KEY. The repo built is the same repo this Lovable app lives in
@@ -8,38 +9,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 //
 // We store `render_service_id` + `worker_url` on `worker_settings` and mark
 // status ready once Render reports the service is live.
-
-const RENDER_API = "https://api.render.com/v1";
-
-async function renderFetch(path: string, apiKey: string, init: RequestInit = {}) {
-  const res = await fetch(`${RENDER_API}${path}`, {
-    ...init,
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-      ...(init.headers || {}),
-    },
-  });
-  const text = await res.text();
-  let json: unknown;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = { raw: text };
-  }
-  if (!res.ok) {
-    throw new Error(`render ${path} ${res.status}: ${text.slice(0, 500)}`);
-  }
-  return json;
-}
-
-async function getOwnerId(apiKey: string): Promise<string> {
-  const list = (await renderFetch("/owners?limit=1", apiKey)) as Array<{ owner: { id: string } }>;
-  const id = list?.[0]?.owner?.id;
-  if (!id) throw new Error("No Render owner found on this account.");
-  return id;
-}
 
 export const getWorkerStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -62,8 +31,7 @@ export const deployWorker = createServerFn({ method: "POST" })
     if (!raw.repoUrl || typeof raw.repoUrl !== "string") {
       throw new Error("repoUrl is required (your GitHub repo URL for this Lovable app)");
     }
-    const normalized = raw.repoUrl.trim().replace(/\.git$/i, "").replace(/\/$/, "");
-    return { repoUrl: normalized, branch: raw.branch || "main" };
+    return { repoUrl: normalizeRepoUrl(raw.repoUrl), branch: raw.branch || "main" };
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -77,40 +45,14 @@ export const deployWorker = createServerFn({ method: "POST" })
       .upsert({ user_id: userId, status: "deploying", last_error: null }, { onConflict: "user_id" });
 
     try {
-      const ownerId = await getOwnerId(renderKey);
-      const serviceName = `playwright-worker-${userId.slice(0, 8)}`;
-
       // Create a Docker-based web service using the worker/ subdir.
-      const created = (await renderFetch("/services", renderKey, {
-        method: "POST",
-        body: JSON.stringify({
-          type: "web_service",
-          name: serviceName,
-          ownerId,
-          repo: data.repoUrl,
-          branch: data.branch,
-          autoDeploy: "yes",
-          serviceDetails: {
-            env: "docker",
-            region: "oregon",
-            plan: "starter",
-            runtime: "docker",
-            dockerfilePath: "./worker/Dockerfile",
-            dockerContext: "./worker",
-            envSpecificDetails: {
-              dockerfilePath: "./worker/Dockerfile",
-              dockerContext: "./worker",
-            },
-            envVars: [
-              { key: "WORKER_TOKEN", value: workerToken },
-              { key: "NODE_ENV", value: "production" },
-            ],
-          },
-        }),
-      })) as { service: { id: string; serviceDetails?: { url?: string } } };
-
-      const serviceId = created.service.id;
-      const url = created.service.serviceDetails?.url;
+      const { serviceId, url } = await createWorkerService({
+        renderKey,
+        workerToken,
+        userId,
+        repoUrl: data.repoUrl,
+        branch: data.branch,
+      });
 
       await supabase
         .from("worker_settings")
@@ -125,7 +67,7 @@ export const deployWorker = createServerFn({ method: "POST" })
           { onConflict: "user_id" },
         );
 
-      return { serviceId, url };
+      return { ok: true as const, serviceId, url };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await supabase
@@ -134,7 +76,7 @@ export const deployWorker = createServerFn({ method: "POST" })
           { user_id: userId, status: "failed", last_error: msg },
           { onConflict: "user_id" },
         );
-      throw err;
+      return { ok: false as const, error: msg };
     }
   });
 
@@ -157,10 +99,7 @@ export const refreshWorker = createServerFn({ method: "POST" })
       return { status: "not_deployed" as const };
     }
 
-    const svc = (await renderFetch(`/services/${settings.render_service_id}`, renderKey)) as {
-      serviceDetails?: { url?: string };
-      suspended?: string;
-    };
+    const svc = await getRenderService(renderKey, settings.render_service_id);
     const url = svc.serviceDetails?.url || settings.worker_url;
 
     // Try /healthz to confirm reachability
