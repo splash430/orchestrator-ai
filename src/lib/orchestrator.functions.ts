@@ -181,7 +181,7 @@ export const runCommand = createServerFn({ method: "POST" })
         run_id: runId,
         user_id: userId,
         kind,
-        data: payload,
+        data: payload as never,
       });
     };
 
@@ -192,13 +192,14 @@ export const runCommand = createServerFn({ method: "POST" })
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
 
-    const history: AnthropicMessage[] = (prior ?? [])
-      .map((m) => {
-        const content = (m.content as { text?: string })?.text;
-        if (!content) return null;
-        return { role: m.role as "user" | "assistant", content };
-      })
-      .filter((v): v is AnthropicMessage => Boolean(v));
+    const history: AnthropicMessage[] = [];
+    for (const m of prior ?? []) {
+      const text = (m.content as { text?: string } | null)?.text;
+      if (!text) continue;
+      if (m.role === "user" || m.role === "assistant") {
+        history.push({ role: m.role, content: text });
+      }
+    }
 
     try {
       let finalText = "";
