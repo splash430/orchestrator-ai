@@ -35,16 +35,16 @@ export const deployWorker = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const renderKey = process.env.RENDER_API_KEY;
-    const workerToken = process.env.WORKER_TOKEN;
-    if (!renderKey) throw new Error("Missing RENDER_API_KEY");
-    if (!workerToken) throw new Error("Missing WORKER_TOKEN");
-
-    await supabase
-      .from("worker_settings")
-      .upsert({ user_id: userId, status: "deploying", last_error: null }, { onConflict: "user_id" });
-
     try {
+      const renderKey = process.env.RENDER_API_KEY;
+      const workerToken = process.env.WORKER_TOKEN;
+      if (!renderKey) throw new Error("Missing RENDER_API_KEY");
+      if (!workerToken) throw new Error("Missing WORKER_TOKEN");
+
+      await supabase
+        .from("worker_settings")
+        .upsert({ user_id: userId, status: "deploying", last_error: null }, { onConflict: "user_id" });
+
       // Create a Docker-based web service using the worker/ subdir.
       const { serviceId, url } = await createWorkerService({
         renderKey,
@@ -99,8 +99,18 @@ export const refreshWorker = createServerFn({ method: "POST" })
       return { status: "not_deployed" as const };
     }
 
-    const svc = await getRenderService(renderKey, settings.render_service_id);
-    const url = svc.serviceDetails?.url || settings.worker_url;
+    let url = settings.worker_url;
+    try {
+      const svc = await getRenderService(renderKey, settings.render_service_id);
+      url = svc.serviceDetails?.url || settings.worker_url;
+    } catch (e) {
+      const err = e instanceof Error ? e.message : String(e);
+      await supabase
+        .from("worker_settings")
+        .update({ status: "failed", last_error: err })
+        .eq("user_id", userId);
+      return { status: "failed" as const, worker_url: url, error: err };
+    }
 
     // Try /healthz to confirm reachability
     let ready = false;

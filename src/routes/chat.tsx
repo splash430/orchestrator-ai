@@ -521,7 +521,8 @@ function WorkerStatusPanel() {
           </button>
           {err && <div className="text-destructive">{err}</div>}
           <p className="text-muted-foreground">
-            First, connect this app to GitHub (Editor → GitHub). Then paste the repo URL above.
+            Use the repo root URL. If Render says it is unfetchable, give Render's GitHub app access
+            to this repository, then retry.
           </p>
         </div>
       )}
