@@ -424,7 +424,7 @@ function WorkerStatusPanel() {
     worker_url?: string | null;
     last_error?: string | null;
   } | null>(null);
-  const [repoUrl, setRepoUrl] = useState("");
+  const [repoUrl, setRepoUrl] = useState("https://github.com/splash430/orchestrator-ai.git");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
