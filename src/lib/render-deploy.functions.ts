@@ -62,7 +62,8 @@ export const deployWorker = createServerFn({ method: "POST" })
     if (!raw.repoUrl || typeof raw.repoUrl !== "string") {
       throw new Error("repoUrl is required (your GitHub repo URL for this Lovable app)");
     }
-    return { repoUrl: raw.repoUrl, branch: raw.branch || "main" };
+    const normalized = raw.repoUrl.trim().replace(/\.git$/i, "").replace(/\/$/, "");
+    return { repoUrl: normalized, branch: raw.branch || "main" };
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
