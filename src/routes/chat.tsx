@@ -6,10 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
   deleteThread,
+  getGithubStatus,
   renameThread,
   runCommand,
 } from "@/lib/orchestrator.functions";
-import { deployWorker, getWorkerStatus, refreshWorker } from "@/lib/render-deploy.functions";
 
 export const Route = createFileRoute("/chat")({
   ssr: false,
@@ -262,7 +262,7 @@ function ChatPage() {
             + New
           </button>
         </div>
-        <WorkerStatusPanel />
+        <GithubStatusPanel />
         <div className="flex-1 overflow-auto">
           {threads.length === 0 && (
             <p className="p-4 text-xs text-muted-foreground">No chats yet.</p>
