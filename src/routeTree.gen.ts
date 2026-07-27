@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
 
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
@@ -28,35 +29,44 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
+  id: '/api/public/run-events',
+  path: '/api/public/run-events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/api/public/run-events': typeof ApiPublicRunEventsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/api/public/run-events': typeof ApiPublicRunEventsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/api/public/run-events': typeof ApiPublicRunEventsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/chat'
+  fullPaths: '/' | '/auth' | '/chat' | '/api/public/run-events'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/chat'
-  id: '__root__' | '/' | '/auth' | '/chat'
+  to: '/' | '/auth' | '/chat' | '/api/public/run-events'
+  id: '__root__' | '/' | '/auth' | '/chat' | '/api/public/run-events'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
+  ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/run-events': {
+      id: '/api/public/run-events'
+      path: '/api/public/run-events'
+      fullPath: '/api/public/run-events'
+      preLoaderRoute: typeof ApiPublicRunEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
+  ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

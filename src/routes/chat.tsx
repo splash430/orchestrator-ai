@@ -6,10 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
   deleteThread,
+  getGithubStatus,
   renameThread,
   runCommand,
 } from "@/lib/orchestrator.functions";
-import { deployWorker, getWorkerStatus, refreshWorker } from "@/lib/render-deploy.functions";
 
 export const Route = createFileRoute("/chat")({
   ssr: false,
@@ -262,7 +262,7 @@ function ChatPage() {
             + New
           </button>
         </div>
-        <WorkerStatusPanel />
+        <GithubStatusPanel />
         <div className="flex-1 overflow-auto">
           {threads.length === 0 && (
             <p className="p-4 text-xs text-muted-foreground">No chats yet.</p>
@@ -426,106 +426,58 @@ function EventView({ e }: { e: RunEvent }) {
   return null;
 }
 
-function WorkerStatusPanel() {
+function GithubStatusPanel() {
   const [status, setStatus] = useState<{
-    status: string;
-    worker_url?: string | null;
-    last_error?: string | null;
+    repo: string | null;
+    hasToken: boolean;
+    hasAnthropic: boolean;
+    hasCallbackSecret: boolean;
   } | null>(null);
-  const [repoUrl, setRepoUrl] = useState("https://github.com/splash430/orchestrator-ai.git");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const getWorkerStatusFn = useServerFn(getWorkerStatus);
-  const deployWorkerFn = useServerFn(deployWorker);
-  const refreshWorkerFn = useServerFn(refreshWorker);
-
-  function cleanRepoInput(value: string) {
-    const match = value.match(/https?:\/\/(?:www\.)?(?:github|gitlab)\.com\/[^\s/]+\/[^\s/]+/i);
-    return (match?.[0] ?? value).trim().replace(/\.git$/i, "").replace(/\/+$/, "");
-  }
+  const getStatus = useServerFn(getGithubStatus);
 
   useEffect(() => {
-    getWorkerStatusFn().then(setStatus).catch(() => setStatus({ status: "not_deployed" }));
-  }, [getWorkerStatusFn]);
-
-  useEffect(() => {
-    if (status?.status !== "deploying") return;
-    const t = setInterval(() => {
-      refreshWorkerFn().then(setStatus).catch(() => {});
-    }, 10000);
-    return () => clearInterval(t);
-  }, [status?.status, refreshWorkerFn]);
-
-  async function deploy() {
-    const cleanedRepoUrl = cleanRepoInput(repoUrl);
-    if (!cleanedRepoUrl) return;
-    setRepoUrl(cleanedRepoUrl);
-    setBusy(true);
-    setErr(null);
-    try {
-      const result = await deployWorkerFn({ data: { repoUrl: cleanedRepoUrl } });
-      if (!result.ok) {
-        setErr(result.error);
-      }
-      const s = await getWorkerStatusFn();
-      setStatus(s);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+    getStatus().then(setStatus).catch(() => setStatus(null));
+  }, [getStatus]);
 
   if (!status) return null;
+
+  const ready =
+    !!status.repo && status.hasToken && status.hasAnthropic && status.hasCallbackSecret;
 
   return (
     <div className="border-b bg-muted/30 px-4 py-3 text-xs">
       <div className="mb-1 flex items-center justify-between">
-        <span className="font-medium">Playwright worker</span>
-        <span
-          className={
-            status.status === "ready"
-              ? "text-green-600"
-              : status.status === "failed"
-                ? "text-destructive"
-                : "text-muted-foreground"
-          }
-        >
-          {status.status}
+        <span className="font-medium">GitHub Actions worker</span>
+        <span className={ready ? "text-green-600" : "text-muted-foreground"}>
+          {ready ? "ready" : "setup needed"}
         </span>
       </div>
-      {status.status === "ready" && (
-        <div className="truncate text-muted-foreground">{status.worker_url}</div>
-      )}
-      {status.status === "deploying" && (
-        <div className="text-muted-foreground">
-          Building on Render… this takes a few minutes. Auto-refreshing.
+      {status.repo ? (
+        <div className="truncate text-muted-foreground">
+          repo: <span className="font-mono">{status.repo}</span>
         </div>
+      ) : (
+        <div className="text-destructive">GITHUB_REPO secret missing</div>
       )}
-      {(status.status === "not_deployed" || status.status === "failed") && (
-        <div className="space-y-2">
-          {status.last_error && <div className="text-destructive">{status.last_error}</div>}
-          <input
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder="https://github.com/you/your-lovable-repo"
-            className="w-full rounded border bg-background px-2 py-1"
-          />
-          <button
-            onClick={deploy}
-            disabled={busy || !repoUrl.trim()}
-            className="w-full rounded bg-primary px-2 py-1 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {busy ? "…" : "Deploy worker to Render"}
-          </button>
-          {err && <div className="text-destructive">{err}</div>}
-          <p className="text-muted-foreground">
-            Use the repo root URL. If Render says it is unfetchable, give Render's GitHub app access
-            to this repository, then retry.
-          </p>
-        </div>
+      {!ready && (
+        <ol className="mt-2 list-decimal space-y-1 pl-4 text-muted-foreground">
+          <li>
+            Push this project to GitHub. The workflow lives at{" "}
+            <span className="font-mono">.github/workflows/run-command.yml</span>.
+          </li>
+          <li>
+            In your repo → Settings → Secrets and variables → Actions, add repo secrets{" "}
+            <span className="font-mono">ANTHROPIC_API_KEY</span> and{" "}
+            <span className="font-mono">WORKFLOW_CALLBACK_SECRET</span> (same value as this app).
+          </li>
+          <li>
+            Ensure the app secrets <span className="font-mono">GITHUB_REPO</span> (owner/repo) and{" "}
+            <span className="font-mono">GITHUB_DISPATCH_TOKEN</span> (PAT with{" "}
+            <span className="font-mono">workflow</span> scope) are set.
+          </li>
+        </ol>
       )}
     </div>
   );
 }
+

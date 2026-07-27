@@ -1,0 +1,55 @@
+name: run-command
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Orchestrator run id
+        required: true
+        type: string
+      thread_id:
+        description: Thread id
+        required: true
+        type: string
+      user_id:
+        description: User id
+        required: true
+        type: string
+      command:
+        description: User command for Claude
+        required: true
+        type: string
+      callback_url:
+        description: HTTPS callback URL that receives events
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install worker deps
+        working-directory: worker
+        run: npm install --omit=dev
+
+      - name: Install Chromium
+        working-directory: worker
+        run: npx playwright install --with-deps chromium
+
+      - name: Run orchestrator
+        working-directory: worker
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WORKFLOW_CALLBACK_SECRET: ${{ secrets.WORKFLOW_CALLBACK_SECRET }}
+          RUN_ID: ${{ inputs.run_id }}
+          THREAD_ID: ${{ inputs.thread_id }}
+          USER_ID: ${{ inputs.user_id }}
+          COMMAND: ${{ inputs.command }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+        run: node run.mjs

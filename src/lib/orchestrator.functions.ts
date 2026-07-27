@@ -1,130 +1,39 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// ----- Types -----
-type AnthropicContentBlock =
-  | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+// GitHub-Actions-backed orchestrator: each `runCommand` dispatches a
+// workflow (`.github/workflows/run-command.yml`) in the user's repo that
+// runs the Claude + Playwright loop and streams events back to
+// `/api/public/run-events`.
 
-type AnthropicMessage = { role: "user" | "assistant"; content: string | AnthropicContentBlock[] };
-
-// ----- Tool schema exposed to Claude -----
-const tools = [
-  {
-    name: "browse",
-    description:
-      "Load a web page in a headless browser and return its title, visible text (up to 12k chars), and a screenshot. Use this to read content from a URL.",
-    input_schema: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "The full https:// URL to load." },
-        wait_for: {
-          type: "string",
-          description: "Optional CSS selector to wait for before capturing.",
-        },
-      },
-      required: ["url"],
-    },
-  },
-  {
-    name: "extract",
-    description:
-      "Load a page and extract text (or an attribute) from every element matching a CSS selector. Good for lists like search results, headlines, or links.",
-    input_schema: {
-      type: "object",
-      properties: {
-        url: { type: "string" },
-        selector: { type: "string", description: "CSS selector matching the items to extract." },
-        attribute: {
-          type: "string",
-          description: "Optional attribute name (e.g. 'href'). Defaults to text content.",
-        },
-      },
-      required: ["url", "selector"],
-    },
-  },
-  {
-    name: "screenshot",
-    description: "Load a page and capture a screenshot (full page optional).",
-    input_schema: {
-      type: "object",
-      properties: {
-        url: { type: "string" },
-        full_page: { type: "boolean" },
-      },
-      required: ["url"],
-    },
-  },
-];
-
-const SYSTEM_PROMPT = `You are an autonomous AI operator with access to a real headless browser via tools.
-The user will give you a command (e.g. "scan recent Reddit posts about AI automation and prepare replies").
-Plan the task, call the tools to actually visit pages, extract data, take screenshots, and iterate.
-Be concrete: cite URLs you visited and quote or summarize what you found.
-When done, produce a final message in clear markdown with:
-  - What you did
-  - Key findings (with links)
-  - Any drafted replies / outputs the user asked for
-Do not fabricate content. If a tool fails, try a different approach or explain.`;
-
-const MAX_TURNS = 12;
-
-// ----- Helpers -----
-async function callWorker(
-  workerUrl: string,
-  workerToken: string,
-  path: string,
-  body: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const res = await fetch(`${workerUrl.replace(/\/$/, "")}${path}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${workerToken}`,
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let json: unknown;
+function callbackUrl() {
   try {
-    json = JSON.parse(text);
-  } catch {
-    json = { raw: text };
-  }
-  if (!res.ok) {
-    throw new Error(`worker ${path} ${res.status}: ${text.slice(0, 300)}`);
-  }
-  return json as Record<string, unknown>;
+    const req = getRequest();
+    const proto = req.headers.get("x-forwarded-proto") ?? "https";
+    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+    if (host) return `${proto}://${host}/api/public/run-events`;
+  } catch {}
+  const override = process.env.PUBLIC_SITE_URL;
+  if (override) return `${override.replace(/\/$/, "")}/api/public/run-events`;
+  throw new Error(
+    "Unable to determine callback URL. Set PUBLIC_SITE_URL env var to your published site (e.g. https://your.lovable.app)",
+  );
 }
 
-async function anthropic(messages: AnthropicMessage[], apiKey: string) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools,
-      messages,
-    }),
+export const getGithubStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    return {
+      repo: process.env.GITHUB_REPO ?? null,
+      hasToken: !!process.env.GITHUB_DISPATCH_TOKEN,
+      hasAnthropic: !!process.env.ANTHROPIC_API_KEY,
+      hasCallbackSecret: !!process.env.WORKFLOW_CALLBACK_SECRET,
+    };
   });
-  const body = await res.text();
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${body.slice(0, 500)}`);
-  return JSON.parse(body) as {
-    stop_reason: string;
-    content: AnthropicContentBlock[];
-  };
-}
 
-// ----- The orchestrator server function -----
 const RunInput = z.object({
   threadId: z.string().uuid(),
   command: z.string().min(1).max(4000),
@@ -135,24 +44,17 @@ export const runCommand = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => RunInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicKey) throw new Error("Missing ANTHROPIC_API_KEY");
 
-    // Load worker URL/token
-    const { data: settings } = await supabase
-      .from("worker_settings")
-      .select("worker_url, status")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const workerUrl = settings?.worker_url;
-    const workerToken = process.env.WORKER_TOKEN;
-    if (!workerUrl || settings?.status !== "ready") {
+    const repo = process.env.GITHUB_REPO;
+    const token = process.env.GITHUB_DISPATCH_TOKEN;
+    if (!repo || !token) {
       throw new Error(
-        "Playwright worker isn't ready yet. Deploy it from the app first (Deploy Worker button).",
+        "GitHub isn't configured yet. Add GITHUB_REPO (owner/repo) and GITHUB_DISPATCH_TOKEN in project secrets.",
       );
     }
-    if (!workerToken) throw new Error("Missing WORKER_TOKEN");
+    if (!process.env.WORKFLOW_CALLBACK_SECRET) {
+      throw new Error("Missing WORKFLOW_CALLBACK_SECRET");
+    }
 
     // Persist the user message
     await supabase.from("messages").insert({
@@ -162,7 +64,7 @@ export const runCommand = createServerFn({ method: "POST" })
       content: { text: data.command },
     });
 
-    // Create a run row
+    // Create run row (status=running; the worker will mark succeeded/failed)
     const { data: run, error: runErr } = await supabase
       .from("runs")
       .insert({
@@ -176,128 +78,53 @@ export const runCommand = createServerFn({ method: "POST" })
     if (runErr || !run) throw new Error(runErr?.message || "failed to create run");
     const runId = run.id;
 
-    const logEvent = async (kind: string, payload: Record<string, unknown>) => {
+    const cbUrl = callbackUrl();
+
+    // Trigger the GitHub Actions workflow
+    const dispatchRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/run-command.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${token}`,
+          "x-github-api-version": "2022-11-28",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            run_id: runId,
+            thread_id: data.threadId,
+            user_id: userId,
+            command: data.command,
+            callback_url: cbUrl,
+          },
+        }),
+      },
+    );
+
+    if (!dispatchRes.ok) {
+      const errText = await dispatchRes.text();
+      const msg = `GitHub dispatch failed (${dispatchRes.status}): ${errText.slice(0, 400)}`;
+      await supabase.from("runs").update({ status: "failed", error: msg }).eq("id", runId);
       await supabase.from("run_events").insert({
         run_id: runId,
         user_id: userId,
-        kind,
-        data: payload as never,
+        kind: "error",
+        data: { error: msg } as never,
       });
-    };
-
-    // Load prior thread messages as Claude context
-    const { data: prior } = await supabase
-      .from("messages")
-      .select("role, content, created_at")
-      .eq("thread_id", data.threadId)
-      .order("created_at", { ascending: true });
-
-    const history: AnthropicMessage[] = [];
-    for (const m of prior ?? []) {
-      const text = (m.content as { text?: string } | null)?.text;
-      if (!text) continue;
-      if (m.role === "user" || m.role === "assistant") {
-        history.push({ role: m.role, content: text });
-      }
+      throw new Error(msg);
     }
 
-    try {
-      let finalText = "";
-      for (let turn = 0; turn < MAX_TURNS; turn++) {
-        await logEvent("log", { message: `Claude turn ${turn + 1}` });
-        const response = await anthropic(history, anthropicKey);
+    await supabase.from("run_events").insert({
+      run_id: runId,
+      user_id: userId,
+      kind: "log",
+      data: { message: "Dispatched GitHub Actions workflow — waiting for worker to start…" } as never,
+    });
 
-        // Collect text and tool_use blocks
-        const assistantBlocks: AnthropicContentBlock[] = response.content;
-        history.push({ role: "assistant", content: assistantBlocks });
-
-        for (const block of assistantBlocks) {
-          if (block.type === "text" && block.text.trim()) {
-            await logEvent("assistant_text", { text: block.text });
-            finalText = block.text;
-          }
-        }
-
-        if (response.stop_reason !== "tool_use") break;
-
-        // Execute every tool_use in this turn
-        const toolResults: AnthropicContentBlock[] = [];
-        for (const block of assistantBlocks) {
-          if (block.type !== "tool_use") continue;
-          await logEvent("tool_call", { name: block.name, input: block.input });
-
-          try {
-            let toolContent = "";
-            if (block.name === "browse") {
-              const r = await callWorker(workerUrl, workerToken, "/browse", block.input);
-              if (typeof r.screenshot === "string") {
-                await logEvent("screenshot", { data_url: `data:image/png;base64,${r.screenshot}` });
-              }
-              toolContent = JSON.stringify({ url: r.url, title: r.title, text: r.text });
-            } else if (block.name === "extract") {
-              const r = await callWorker(workerUrl, workerToken, "/extract", block.input);
-              toolContent = JSON.stringify({ items: r.items });
-            } else if (block.name === "screenshot") {
-              const r = await callWorker(workerUrl, workerToken, "/screenshot", block.input);
-              if (typeof r.screenshot === "string") {
-                await logEvent("screenshot", { data_url: `data:image/png;base64,${r.screenshot}` });
-              }
-              toolContent = JSON.stringify({ ok: true });
-            } else {
-              toolContent = JSON.stringify({ error: `unknown tool ${block.name}` });
-            }
-            await logEvent("tool_result", { name: block.name, preview: toolContent.slice(0, 400) });
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: toolContent,
-            });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            await logEvent("error", { name: block.name, error: msg });
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: msg,
-              is_error: true,
-            });
-          }
-        }
-        history.push({ role: "user", content: toolResults });
-      }
-
-      // Persist final assistant message
-      await supabase.from("messages").insert({
-        thread_id: data.threadId,
-        user_id: userId,
-        role: "assistant",
-        content: { text: finalText || "(no response)" },
-      });
-
-      await supabase
-        .from("runs")
-        .update({ status: "succeeded", result: { text: finalText } })
-        .eq("id", runId);
-
-      // Bump thread updated_at + title if empty
-      await supabase
-        .from("threads")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", data.threadId);
-
-      return { runId, text: finalText };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await logEvent("error", { error: msg });
-      await supabase.from("runs").update({ status: "failed", error: msg }).eq("id", runId);
-      await supabase.from("messages").insert({
-        thread_id: data.threadId,
-        user_id: userId,
-        role: "assistant",
-        content: { text: `⚠️ Run failed: ${msg}` },
-      });
-      throw err;
-    }
+    return { runId };
   });
 
 // ----- Thread management -----
