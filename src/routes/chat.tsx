@@ -434,7 +434,10 @@ function GithubStatusPanel() {
     hasAnthropic: boolean;
     hasCallbackSecret: boolean;
   } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
   const getStatus = useServerFn(getGithubStatus);
+  const setupFn = useServerFn(setupGithubSecrets);
 
   useEffect(() => {
     getStatus().then(setStatus).catch(() => setStatus(null));
@@ -442,15 +445,28 @@ function GithubStatusPanel() {
 
   if (!status) return null;
 
-  const ready =
+  const canSetup =
     !!status.repo && status.hasToken && status.hasAnthropic && status.hasCallbackSecret;
+
+  const handleSetup = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await setupFn();
+      setMsg(`✓ Pushed secrets: ${r.secrets.join(", ")}`);
+    } catch (e) {
+      setMsg(`✗ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="border-b bg-muted/30 px-4 py-3 text-xs">
       <div className="mb-1 flex items-center justify-between">
         <span className="font-medium">GitHub Actions worker</span>
-        <span className={ready ? "text-green-600" : "text-muted-foreground"}>
-          {ready ? "ready" : "setup needed"}
+        <span className={canSetup ? "text-green-600" : "text-muted-foreground"}>
+          {canSetup ? "ready" : "setup needed"}
         </span>
       </div>
       {status.repo ? (
@@ -460,25 +476,31 @@ function GithubStatusPanel() {
       ) : (
         <div className="text-destructive">GITHUB_REPO secret missing</div>
       )}
-      {!ready && (
-        <ol className="mt-2 list-decimal space-y-1 pl-4 text-muted-foreground">
-          <li>
-            Push this project to GitHub. The workflow lives at{" "}
-            <span className="font-mono">.github/workflows/run-command.yml</span>.
-          </li>
-          <li>
-            In your repo → Settings → Secrets and variables → Actions, add repo secrets{" "}
-            <span className="font-mono">ANTHROPIC_API_KEY</span> and{" "}
-            <span className="font-mono">WORKFLOW_CALLBACK_SECRET</span> (same value as this app).
-          </li>
-          <li>
-            Ensure the app secrets <span className="font-mono">GITHUB_REPO</span> (owner/repo) and{" "}
-            <span className="font-mono">GITHUB_DISPATCH_TOKEN</span> (PAT with{" "}
-            <span className="font-mono">workflow</span> scope) are set.
-          </li>
-        </ol>
+      {canSetup && (
+        <div className="mt-2">
+          <button
+            onClick={handleSetup}
+            disabled={busy}
+            className="rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+          >
+            {busy ? "Pushing secrets…" : "Push secrets to GitHub repo"}
+          </button>
+          <p className="mt-1 text-muted-foreground">
+            Auto-configures <span className="font-mono">ANTHROPIC_API_KEY</span> and{" "}
+            <span className="font-mono">WORKFLOW_CALLBACK_SECRET</span> as Actions secrets on your
+            repo — no manual setup needed.
+          </p>
+          {msg && <p className="mt-1 font-mono">{msg}</p>}
+        </div>
+      )}
+      {!canSetup && (
+        <p className="mt-2 text-muted-foreground">
+          Missing app secret(s): make sure GITHUB_REPO, GITHUB_DISPATCH_TOKEN, ANTHROPIC_API_KEY,
+          and WORKFLOW_CALLBACK_SECRET are all set.
+        </p>
       )}
     </div>
   );
 }
+
 
