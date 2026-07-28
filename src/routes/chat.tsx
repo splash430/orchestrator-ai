@@ -9,6 +9,7 @@ import {
   getGithubStatus,
   renameThread,
   runCommand,
+  setupGithubSecrets,
 } from "@/lib/orchestrator.functions";
 
 export const Route = createFileRoute("/chat")({
