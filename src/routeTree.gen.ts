@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicWireGithubRouteImport } from './routes/api/public/wire-github'
 import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
 
 const ChatRoute = ChatRouteImport.update({
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWireGithubRoute = ApiPublicWireGithubRouteImport.update({
+  id: '/api/public/wire-github',
+  path: '/api/public/wire-github',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
   id: '/api/public/run-events',
   path: '/api/public/run-events',
@@ -40,12 +46,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
+  '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
+  '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,30 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
+  '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/chat' | '/api/public/run-events'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/chat' | '/api/public/run-events'
-  id: '__root__' | '/' | '/auth' | '/chat' | '/api/public/run-events'
+  to:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +92,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
+  ApiPublicWireGithubRoute: typeof ApiPublicWireGithubRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,6 +118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/wire-github': {
+      id: '/api/public/wire-github'
+      path: '/api/public/wire-github'
+      fullPath: '/api/public/wire-github'
+      preLoaderRoute: typeof ApiPublicWireGithubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/run-events': {
       id: '/api/public/run-events'
       path: '/api/public/run-events'
@@ -107,6 +140,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
+  ApiPublicWireGithubRoute: ApiPublicWireGithubRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
