@@ -34,6 +34,58 @@ export const getGithubStatus = createServerFn({ method: "GET" })
     };
   });
 
+export const setupGithubSecrets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const repo = process.env.GITHUB_REPO;
+    const token = process.env.GITHUB_DISPATCH_TOKEN;
+    const anthropic = process.env.ANTHROPIC_API_KEY;
+    const callback = process.env.WORKFLOW_CALLBACK_SECRET;
+    if (!repo || !token) throw new Error("GITHUB_REPO or GITHUB_DISPATCH_TOKEN missing");
+    if (!anthropic || !callback)
+      throw new Error("ANTHROPIC_API_KEY or WORKFLOW_CALLBACK_SECRET missing");
+
+    const gh = async (path: string, init?: RequestInit) => {
+      const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+        ...init,
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${token}`,
+          "x-github-api-version": "2022-11-28",
+          "content-type": "application/json",
+          ...(init?.headers || {}),
+        },
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`GitHub ${path} ${res.status}: ${t.slice(0, 300)}`);
+      }
+      return res;
+    };
+
+    const keyRes = await gh(`/actions/secrets/public-key`);
+    const { key, key_id } = (await keyRes.json()) as { key: string; key_id: string };
+
+    const sodium = (await import("libsodium-wrappers")).default;
+    await sodium.ready;
+    const keyBytes = sodium.from_base64(key, sodium.base64_variants.ORIGINAL);
+
+    const putSecret = async (name: string, value: string) => {
+      const encrypted = sodium.crypto_box_seal(sodium.from_string(value), keyBytes);
+      const encrypted_value = sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
+      await gh(`/actions/secrets/${name}`, {
+        method: "PUT",
+        body: JSON.stringify({ encrypted_value, key_id }),
+      });
+    };
+
+    await putSecret("ANTHROPIC_API_KEY", anthropic);
+    await putSecret("WORKFLOW_CALLBACK_SECRET", callback);
+
+    return { ok: true, secrets: ["ANTHROPIC_API_KEY", "WORKFLOW_CALLBACK_SECRET"] };
+  });
+
+
 const RunInput = z.object({
   threadId: z.string().uuid(),
   command: z.string().min(1).max(4000),
