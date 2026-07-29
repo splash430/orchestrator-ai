@@ -15,10 +15,11 @@ export const Route = createFileRoute("/api/public/wire-github")({
         const wantDispatch = url.searchParams.get("dispatch") === "1";
         const wantPoll = url.searchParams.get("poll") === "1";
 
-        const repo = process.env.GITHUB_REPO;
-        const token = process.env.GITHUB_DISPATCH_TOKEN;
-        const anthropic = process.env.ANTHROPIC_API_KEY;
+        const repo = process.env.GITHUB_REPO?.trim();
+        const token = process.env.GITHUB_DISPATCH_TOKEN?.trim();
+        const anthropic = process.env.ANTHROPIC_API_KEY?.trim();
         const callback = process.env.WORKFLOW_CALLBACK_SECRET;
+
 
         if (!repo || !token) {
           return Response.json(
