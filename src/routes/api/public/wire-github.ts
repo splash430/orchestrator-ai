@@ -91,26 +91,24 @@ export const Route = createFileRoute("/api/public/wire-github")({
             checkPath("worker/selftest.mjs"),
           ]);
 
-        // 3. Push encrypted secrets
+        // 3. Push encrypted secrets (non-fatal: report and continue)
         const secrets: Array<{ name: string; ok: boolean; status: number; body?: string }> = [];
+        let secretsError: Record<string, unknown> | undefined;
         if (anthropic && callback) {
           const keyRes = await gh("/actions/secrets/public-key");
           if (!keyRes.ok) {
-            return Response.json(
-              {
-                ok: false,
-                step: "public-key",
-                status: keyRes.status,
-                error: (await keyRes.text()).slice(0, 400),
-                hint: "Token is missing the Actions secrets write permission (needs 'repo' + 'workflow', or fine-grained 'Secrets: read & write').",
-              },
-              { status: 200 },
-            );
-          }
+            secretsError = {
+              step: "public-key",
+              status: keyRes.status,
+              error: (await keyRes.text()).slice(0, 400),
+              hint: "The stored GitHub token cannot write Actions secrets. A classic PAT needs 'repo' + 'workflow'; a fine-grained token needs Repository permissions → Secrets: Read and write (plus Actions: Read and write, Contents: Read).",
+            };
+          } else {
           const { key, key_id } = (await keyRes.json()) as { key: string; key_id: string };
           const sodium = (await import("libsodium-wrappers")).default;
           await sodium.ready;
           const keyBytes = sodium.from_base64(key, sodium.base64_variants.ORIGINAL);
+
           for (const [name, value] of [
             ["ANTHROPIC_API_KEY", anthropic],
             ["WORKFLOW_CALLBACK_SECRET", callback],
@@ -128,7 +126,9 @@ export const Route = createFileRoute("/api/public/wire-github")({
               body: r.ok ? undefined : (await r.text()).slice(0, 200),
             });
           }
+          }
         }
+
 
         // 4. Optionally dispatch the Playwright self-test
         let dispatch: Record<string, unknown> | undefined;
@@ -164,8 +164,10 @@ export const Route = createFileRoute("/api/public/wire-github")({
             "worker/selftest.mjs": workerSelftest,
           },
           secrets,
+          secretsError,
           dispatch,
           hint:
+
             workflowFile && workerDir
               ? undefined
               : "Repo is missing workflow/worker files — sync this project to GitHub.",
