@@ -164,8 +164,10 @@ export const Route = createFileRoute("/api/public/wire-github")({
             "worker/selftest.mjs": workerSelftest,
           },
           secrets,
+          secretsError,
           dispatch,
           hint:
+
             workflowFile && workerDir
               ? undefined
               : "Repo is missing workflow/worker files — sync this project to GitHub.",
