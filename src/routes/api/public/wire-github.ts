@@ -157,7 +157,7 @@ export const Route = createFileRoute("/api/public/wire-github")({
           repo,
           default_branch: branch,
           files: {
-            "​.github/workflows/run-command.yml": workflowFile,
+            ".github/workflows/run-command.yml": workflowFile,
             ".github/workflows/selftest.yml": selftestFile,
             "worker/": workerDir,
             "worker/run.mjs": workerRun,
