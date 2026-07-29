@@ -126,7 +126,9 @@ export const Route = createFileRoute("/api/public/wire-github")({
               body: r.ok ? undefined : (await r.text()).slice(0, 200),
             });
           }
+          }
         }
+
 
         // 4. Optionally dispatch the Playwright self-test
         let dispatch: Record<string, unknown> | undefined;
