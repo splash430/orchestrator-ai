@@ -52,6 +52,7 @@ export const setupGithubSecrets = createServerFn({ method: "POST" })
           accept: "application/vnd.github+json",
           authorization: `Bearer ${token}`,
           "x-github-api-version": "2022-11-28",
+          "user-agent": "lovable-orchestrator-app",
           "content-type": "application/json",
           ...(init?.headers || {}),
         },
@@ -141,6 +142,7 @@ export const runCommand = createServerFn({ method: "POST" })
           accept: "application/vnd.github+json",
           authorization: `Bearer ${token}`,
           "x-github-api-version": "2022-11-28",
+          "user-agent": "lovable-orchestrator-app",
           "content-type": "application/json",
         },
         body: JSON.stringify({

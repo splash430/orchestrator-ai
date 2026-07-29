@@ -1,0 +1,51 @@
+name: selftest
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: URL to open with Playwright
+        required: false
+        default: https://www.reddit.com
+        type: string
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install worker deps
+        working-directory: worker
+        run: npm install --omit=dev
+
+      - name: Install Chromium
+        working-directory: worker
+        run: npx playwright install --with-deps chromium
+
+      - name: Check required secrets are present
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WORKFLOW_CALLBACK_SECRET: ${{ secrets.WORKFLOW_CALLBACK_SECRET }}
+        run: |
+          test -n "$ANTHROPIC_API_KEY" || { echo "ANTHROPIC_API_KEY missing"; exit 1; }
+          test -n "$WORKFLOW_CALLBACK_SECRET" || { echo "WORKFLOW_CALLBACK_SECRET missing"; exit 1; }
+          echo "both required secrets are present"
+
+      - name: Open page and capture screenshot
+        working-directory: worker
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+        run: node selftest.mjs
+
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-screenshot
+          path: worker/selftest.png
+          if-no-files-found: error

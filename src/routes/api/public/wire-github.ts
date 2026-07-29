@@ -1,123 +1,174 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 // One-shot admin endpoint: pushes ANTHROPIC_API_KEY + WORKFLOW_CALLBACK_SECRET
-// into the configured GitHub repo's Actions secrets, and reports whether the
-// run-command.yml workflow is present. Guarded by WORKFLOW_CALLBACK_SECRET
-// (same shared secret the worker uses) sent as `x-admin-secret` header.
+// into the configured GitHub repo's Actions secrets, verifies the workflow and
+// worker files are present, and can dispatch/poll a Playwright self-test run.
+// Only ever touches the pre-configured GITHUB_REPO.
+
+const UA = "lovable-orchestrator-app";
 
 export const Route = createFileRoute("/api/public/wire-github")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const url = new URL(request.url);
+        const wantDispatch = url.searchParams.get("dispatch") === "1";
+        const wantPoll = url.searchParams.get("poll") === "1";
+
         const repo = process.env.GITHUB_REPO;
         const token = process.env.GITHUB_DISPATCH_TOKEN;
         const anthropic = process.env.ANTHROPIC_API_KEY;
         const callback = process.env.WORKFLOW_CALLBACK_SECRET;
 
-        // Idempotent one-shot wiring; only touches the pre-configured repo
-        // that the stored token already has access to.
-        void request;
-        if (!callback) {
-          return Response.json({ ok: false, error: "WORKFLOW_CALLBACK_SECRET missing" }, { status: 400 });
-        }
         if (!repo || !token) {
           return Response.json(
             { ok: false, error: "GITHUB_REPO or GITHUB_DISPATCH_TOKEN missing" },
             { status: 400 },
           );
         }
-        if (!anthropic) {
-          return Response.json(
-            { ok: false, error: "ANTHROPIC_API_KEY missing" },
-            { status: 400 },
-          );
-        }
 
-        const gh = async (path: string, init?: RequestInit) => {
-          const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+        const gh = (path: string, init?: RequestInit) =>
+          fetch(`https://api.github.com/repos/${repo}${path}`, {
             ...init,
             headers: {
               accept: "application/vnd.github+json",
               authorization: `Bearer ${token}`,
               "x-github-api-version": "2022-11-28",
               "content-type": "application/json",
+              "user-agent": UA,
               ...(init?.headers || {}),
             },
           });
-          return res;
-        };
 
         // 1. Repo reachable?
         const repoRes = await gh("");
         if (!repoRes.ok) {
-          const t = await repoRes.text();
           return Response.json(
             {
               ok: false,
               step: "repo",
               status: repoRes.status,
-              error: t.slice(0, 400),
+              error: (await repoRes.text()).slice(0, 400),
               hint:
                 repoRes.status === 404
-                  ? "Repo not found or token lacks access. GITHUB_REPO must be 'owner/repo' and the token needs repo + workflow scope."
+                  ? "Repo not found or token lacks access. GITHUB_REPO must be 'owner/repo' with repo + workflow scope."
                   : undefined,
             },
             { status: 200 },
           );
         }
         const repoInfo = (await repoRes.json()) as { default_branch?: string };
+        const branch = repoInfo.default_branch || "main";
 
-        // 2. Push encrypted secrets
-        const keyRes = await gh("/actions/secrets/public-key");
-        if (!keyRes.ok) {
-          const t = await keyRes.text();
-          return Response.json(
-            {
-              ok: false,
-              step: "public-key",
-              status: keyRes.status,
-              error: t.slice(0, 400),
-              hint: "Token likely missing 'actions:write' / 'secrets' permission.",
-            },
-            { status: 200 },
-          );
+        // Poll-only mode: return latest runs for both workflows.
+        if (wantPoll) {
+          const runsRes = await gh(`/actions/runs?per_page=10`);
+          const runsJson = (await runsRes.json()) as {
+            workflow_runs?: Array<Record<string, unknown>>;
+          };
+          const runs = (runsJson.workflow_runs || []).map((r) => ({
+            name: r.name,
+            id: r.id,
+            status: r.status,
+            conclusion: r.conclusion,
+            html_url: r.html_url,
+            created_at: r.created_at,
+          }));
+          return Response.json({ ok: true, repo, runs });
         }
-        const { key, key_id } = (await keyRes.json()) as { key: string; key_id: string };
-        const sodium = (await import("libsodium-wrappers")).default;
-        await sodium.ready;
-        const keyBytes = sodium.from_base64(key, sodium.base64_variants.ORIGINAL);
-        const putSecret = async (name: string, value: string) => {
-          const enc = sodium.crypto_box_seal(sodium.from_string(value), keyBytes);
-          const encrypted_value = sodium.to_base64(enc, sodium.base64_variants.ORIGINAL);
-          const r = await gh(`/actions/secrets/${name}`, {
-            method: "PUT",
-            body: JSON.stringify({ encrypted_value, key_id }),
-          });
-          return { name, ok: r.ok, status: r.status, body: r.ok ? "" : (await r.text()).slice(0, 200) };
+
+        // 2. Verify required files exist in the repo
+        const checkPath = async (p: string) => {
+          const r = await gh(`/contents/${p}?ref=${branch}`);
+          return r.ok;
         };
-        const s1 = await putSecret("ANTHROPIC_API_KEY", anthropic);
-        const s2 = await putSecret("WORKFLOW_CALLBACK_SECRET", callback);
+        const [workflowFile, selftestFile, workerDir, workerRun, workerSelftest] =
+          await Promise.all([
+            checkPath(".github/workflows/run-command.yml"),
+            checkPath(".github/workflows/selftest.yml"),
+            checkPath("worker"),
+            checkPath("worker/run.mjs"),
+            checkPath("worker/selftest.mjs"),
+          ]);
 
-        // 3. Verify workflow file present
-        const wfRes = await gh("/actions/workflows");
-        let workflowPresent = false;
-        let workflowList: string[] = [];
-        if (wfRes.ok) {
-          const j = (await wfRes.json()) as { workflows?: Array<{ path: string; name: string }> };
-          workflowList = (j.workflows || []).map((w) => w.path);
-          workflowPresent = workflowList.some((p) => p.endsWith("run-command.yml"));
+        // 3. Push encrypted secrets
+        const secrets: Array<{ name: string; ok: boolean; status: number; body?: string }> = [];
+        if (anthropic && callback) {
+          const keyRes = await gh("/actions/secrets/public-key");
+          if (!keyRes.ok) {
+            return Response.json(
+              {
+                ok: false,
+                step: "public-key",
+                status: keyRes.status,
+                error: (await keyRes.text()).slice(0, 400),
+                hint: "Token is missing the Actions secrets write permission (needs 'repo' + 'workflow', or fine-grained 'Secrets: read & write').",
+              },
+              { status: 200 },
+            );
+          }
+          const { key, key_id } = (await keyRes.json()) as { key: string; key_id: string };
+          const sodium = (await import("libsodium-wrappers")).default;
+          await sodium.ready;
+          const keyBytes = sodium.from_base64(key, sodium.base64_variants.ORIGINAL);
+          for (const [name, value] of [
+            ["ANTHROPIC_API_KEY", anthropic],
+            ["WORKFLOW_CALLBACK_SECRET", callback],
+          ] as const) {
+            const enc = sodium.crypto_box_seal(sodium.from_string(value), keyBytes);
+            const encrypted_value = sodium.to_base64(enc, sodium.base64_variants.ORIGINAL);
+            const r = await gh(`/actions/secrets/${name}`, {
+              method: "PUT",
+              body: JSON.stringify({ encrypted_value, key_id }),
+            });
+            secrets.push({
+              name,
+              ok: r.ok,
+              status: r.status,
+              body: r.ok ? undefined : (await r.text()).slice(0, 200),
+            });
+          }
         }
 
+        // 4. Optionally dispatch the Playwright self-test
+        let dispatch: Record<string, unknown> | undefined;
+        if (wantDispatch) {
+          if (!selftestFile) {
+            dispatch = { ok: false, error: "selftest.yml not present in repo yet" };
+          } else {
+            const d = await gh(`/actions/workflows/selftest.yml/dispatches`, {
+              method: "POST",
+              body: JSON.stringify({
+                ref: branch,
+                inputs: { target_url: "https://www.reddit.com" },
+              }),
+            });
+            dispatch = {
+              ok: d.ok,
+              status: d.status,
+              error: d.ok ? undefined : (await d.text()).slice(0, 300),
+            };
+          }
+        }
+
+        const secretsOk = secrets.length === 2 && secrets.every((s) => s.ok);
         return Response.json({
-          ok: s1.ok && s2.ok,
+          ok: secretsOk && workflowFile && workerDir,
           repo,
-          default_branch: repoInfo.default_branch,
-          secrets: [s1, s2],
-          workflow_present: workflowPresent,
-          workflows: workflowList,
-          hint: workflowPresent
-            ? undefined
-            : "Push .github/workflows/run-command.yml + worker/ to the repo (Lovable → GitHub sync).",
+          default_branch: branch,
+          files: {
+            ".github/workflows/run-command.yml": workflowFile,
+            ".github/workflows/selftest.yml": selftestFile,
+            "worker/": workerDir,
+            "worker/run.mjs": workerRun,
+            "worker/selftest.mjs": workerSelftest,
+          },
+          secrets,
+          dispatch,
+          hint:
+            workflowFile && workerDir
+              ? undefined
+              : "Repo is missing workflow/worker files — sync this project to GitHub.",
         });
       },
     },
