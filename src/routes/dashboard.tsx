@@ -101,7 +101,7 @@ function DashboardPage() {
     setCreating(true);
     try {
       const { id } = await createThreadFn({ data: {} });
-      window.location.href = `/chat?thread=${id}`;
+      window.location.href = "/chat";
     } finally {
       setCreating(false);
     }
@@ -180,7 +180,6 @@ function DashboardPage() {
                     </span>
                     <Link
                       to="/chat"
-                      search={{ thread: r.thread_id }}
                       className="text-muted-foreground hover:text-foreground"
                       aria-label="Open task"
                     >
