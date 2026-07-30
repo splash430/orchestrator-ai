@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      memories: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          id: string
+          pinned: boolean
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          content: string
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: Json

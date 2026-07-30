@@ -131,7 +131,23 @@ export const runCommand = createServerFn({ method: "POST" })
     if (runErr || !run) throw new Error(runErr?.message || "failed to create run");
     const runId = run.id;
 
+    // Give the worker everything the assistant remembers about this user.
+    const { data: memRows } = await supabase
+      .from("memories")
+      .select("category, content")
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(40);
+    const memoryBlock =
+      memRows && memRows.length
+        ? `\n\n---\nKnown context about the user (use it to personalise everything you write):\n${memRows
+            .map((m) => `- [${m.category}] ${m.content}`)
+            .join("\n")}\n---\n`
+        : "";
+    const contextualCommand = `${data.command}${memoryBlock}`.slice(0, 60000);
+
     const cbUrl = callbackUrl();
+
 
     // Trigger the GitHub Actions workflow
     const dispatchRes = await fetch(
@@ -151,7 +167,7 @@ export const runCommand = createServerFn({ method: "POST" })
             run_id: runId,
             thread_id: data.threadId,
             user_id: userId,
-            command: data.command,
+            command: contextualCommand,
             callback_url: cbUrl,
           },
         }),

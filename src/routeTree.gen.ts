@@ -9,12 +9,37 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWireGithubRouteImport } from './routes/api/public/wire-github'
 import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
 
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -23,6 +48,11 @@ const ChatRoute = ChatRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,23 +73,38 @@ const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
+  '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
+  '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
+  '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
@@ -67,36 +112,84 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity'
     | '/auth'
     | '/chat'
+    | '/dashboard'
+    | '/integrations'
+    | '/memory'
+    | '/tasks'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activity'
     | '/auth'
     | '/chat'
+    | '/dashboard'
+    | '/integrations'
+    | '/memory'
+    | '/tasks'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   id:
     | '__root__'
     | '/'
+    | '/activity'
     | '/auth'
     | '/chat'
+    | '/dashboard'
+    | '/integrations'
+    | '/memory'
+    | '/tasks'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityRoute: typeof ActivityRoute
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
+  DashboardRoute: typeof DashboardRoute
+  IntegrationsRoute: typeof IntegrationsRoute
+  MemoryRoute: typeof MemoryRoute
+  TasksRoute: typeof TasksRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
   ApiPublicWireGithubRoute: typeof ApiPublicWireGithubRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chat': {
       id: '/chat'
       path: '/chat'
@@ -109,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -137,21 +237,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityRoute: ActivityRoute,
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
+  DashboardRoute: DashboardRoute,
+  IntegrationsRoute: IntegrationsRoute,
+  MemoryRoute: MemoryRoute,
+  TasksRoute: TasksRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
   ApiPublicWireGithubRoute: ApiPublicWireGithubRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
