@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -27,6 +28,11 @@ const TasksRoute = TasksRouteImport.update({
 const MemoryRoute = MemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
   '/memory': typeof MemoryRoute
   '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
   '/memory': typeof MemoryRoute
   '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
   '/dashboard': typeof DashboardRoute
+  '/integrations': typeof IntegrationsRoute
   '/memory': typeof MemoryRoute
   '/tasks': typeof TasksRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/dashboard'
+    | '/integrations'
     | '/memory'
     | '/tasks'
     | '/api/public/run-events'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/dashboard'
+    | '/integrations'
     | '/memory'
     | '/tasks'
     | '/api/public/run-events'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/dashboard'
+    | '/integrations'
     | '/memory'
     | '/tasks'
     | '/api/public/run-events'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
   DashboardRoute: typeof DashboardRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   MemoryRoute: typeof MemoryRoute
   TasksRoute: typeof TasksRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/memory'
       fullPath: '/memory'
       preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
   DashboardRoute: DashboardRoute,
+  IntegrationsRoute: IntegrationsRoute,
   MemoryRoute: MemoryRoute,
   TasksRoute: TasksRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
