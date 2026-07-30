@@ -167,7 +167,7 @@ export const runCommand = createServerFn({ method: "POST" })
             run_id: runId,
             thread_id: data.threadId,
             user_id: userId,
-            command: data.command,
+            command: contextualCommand,
             callback_url: cbUrl,
           },
         }),
