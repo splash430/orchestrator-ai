@@ -45,7 +45,7 @@ jobs:
       - name: Run orchestrator
         working-directory: worker
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LOVABLE_API_KEY: ${{ secrets.LOVABLE_API_KEY }}
           WORKFLOW_CALLBACK_SECRET: ${{ secrets.WORKFLOW_CALLBACK_SECRET }}
           RUN_ID: ${{ inputs.run_id }}
           THREAD_ID: ${{ inputs.thread_id }}

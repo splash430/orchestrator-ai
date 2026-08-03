@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// One-shot admin endpoint: pushes ANTHROPIC_API_KEY + WORKFLOW_CALLBACK_SECRET
+// One-shot admin endpoint: pushes LOVABLE_API_KEY + WORKFLOW_CALLBACK_SECRET
 // into the configured GitHub repo's Actions secrets, verifies the workflow and
 // worker files are present, and can dispatch/poll a Playwright self-test run.
 // Only ever touches the pre-configured GITHUB_REPO.
