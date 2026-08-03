@@ -81,10 +81,11 @@ export const setupGithubSecrets = createServerFn({ method: "POST" })
       });
     };
 
-    await putSecret("ANTHROPIC_API_KEY", anthropic);
+    await putSecret("LOVABLE_API_KEY", lovable);
     await putSecret("WORKFLOW_CALLBACK_SECRET", callback);
 
-    return { ok: true, secrets: ["ANTHROPIC_API_KEY", "WORKFLOW_CALLBACK_SECRET"] };
+    return { ok: true, secrets: ["LOVABLE_API_KEY", "WORKFLOW_CALLBACK_SECRET"] };
+
   });
 
 
