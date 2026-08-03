@@ -211,9 +211,8 @@ function HomePage() {
   const activeRun = runs.find((r) => r.status === "running" || r.status === "pending");
   const running = !!activeRun || starting;
 
-  const runProspects = 
-    ? prospects.filter((p) => true)
-    : prospects;
+  const runProspects = prospects;
+
   const status = starting
     ? "Starting"
     : activeRun
