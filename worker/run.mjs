@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 
 const {
-  ANTHROPIC_API_KEY,
+  LOVABLE_API_KEY,
   WORKFLOW_CALLBACK_SECRET,
   RUN_ID,
   THREAD_ID,
@@ -17,7 +17,7 @@ const {
 } = process.env;
 
 for (const [k, v] of Object.entries({
-  ANTHROPIC_API_KEY,
+  LOVABLE_API_KEY,
   WORKFLOW_CALLBACK_SECRET,
   RUN_ID,
   THREAD_ID,
@@ -33,7 +33,7 @@ for (const [k, v] of Object.entries({
 
 const MAX_TURNS = 12;
 
-const tools = [
+const rawTools = [
   {
     name: "browse",
     description:
@@ -72,6 +72,11 @@ const tools = [
   },
 ];
 
+const tools = rawTools.map((t) => ({
+  type: "function",
+  function: { name: t.name, description: t.description, parameters: t.input_schema },
+}));
+
 const SYSTEM_PROMPT = `You are an autonomous AI operator with access to a real headless browser via tools.
 Plan the task, call the tools to actually visit pages, extract data, take screenshots, and iterate.
 Be concrete: cite URLs you visited and quote or summarize what you found.
@@ -98,25 +103,23 @@ async function post(body) {
 const logEvent = (kind, data) =>
   post({ type: "event", runId: RUN_ID, userId: USER_ID, threadId: THREAD_ID, kind, data });
 
-async function anthropic(messages) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+async function llm(messages) {
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      "Lovable-API-Key": LOVABLE_API_KEY,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      model: "openai/gpt-5.6-sol",
+      reasoning_effort: "none",
       tools,
-      messages,
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     }),
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${body.slice(0, 500)}`);
-  return JSON.parse(body);
+  if (!res.ok) throw new Error(`ai gateway ${res.status}: ${body.slice(0, 500)}`);
+  return JSON.parse(body).choices[0].message;
 }
 
 let browserPromise;
