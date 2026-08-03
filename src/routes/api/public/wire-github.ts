@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/public/wire-github")({
 
         const repo = process.env.GITHUB_REPO?.trim();
         const token = process.env.GITHUB_DISPATCH_TOKEN?.trim();
-        const anthropic = process.env.ANTHROPIC_API_KEY?.trim();
+        const lovableKey = process.env.LOVABLE_API_KEY?.trim();
         const callback = process.env.WORKFLOW_CALLBACK_SECRET;
 
 
