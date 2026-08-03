@@ -1,9 +1,9 @@
-name: run-command
+name: run-mission
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Orchestrator run id
+        description: Run id
         required: true
         type: string
       thread_id:
@@ -14,8 +14,8 @@ on:
         description: User id
         required: true
         type: string
-      command:
-        description: User command for Claude
+      mission:
+        description: Mission config JSON
         required: true
         type: string
       callback_url:
@@ -26,7 +26,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +42,7 @@ jobs:
         working-directory: worker
         run: npx playwright install --with-deps chromium
 
-      - name: Run orchestrator
+      - name: Run mission
         working-directory: worker
         env:
           LOVABLE_API_KEY: ${{ secrets.LOVABLE_API_KEY }}
@@ -50,6 +50,6 @@ jobs:
           RUN_ID: ${{ inputs.run_id }}
           THREAD_ID: ${{ inputs.thread_id }}
           USER_ID: ${{ inputs.user_id }}
-          COMMAND: ${{ inputs.command }}
+          MISSION: ${{ inputs.mission }}
           CALLBACK_URL: ${{ inputs.callback_url }}
-        run: node run.mjs
+        run: node mission.mjs

@@ -29,7 +29,7 @@ export const getGithubStatus = createServerFn({ method: "GET" })
     return {
       repo: process.env.GITHUB_REPO ?? null,
       hasToken: !!process.env.GITHUB_DISPATCH_TOKEN,
-      hasAnthropic: !!process.env.ANTHROPIC_API_KEY,
+      hasAi: !!process.env.LOVABLE_API_KEY,
       hasCallbackSecret: !!process.env.WORKFLOW_CALLBACK_SECRET,
     };
   });
@@ -39,11 +39,12 @@ export const setupGithubSecrets = createServerFn({ method: "POST" })
   .handler(async () => {
     const repo = process.env.GITHUB_REPO;
     const token = process.env.GITHUB_DISPATCH_TOKEN;
-    const anthropic = process.env.ANTHROPIC_API_KEY;
+    const lovable = process.env.LOVABLE_API_KEY;
     const callback = process.env.WORKFLOW_CALLBACK_SECRET;
     if (!repo || !token) throw new Error("GITHUB_REPO or GITHUB_DISPATCH_TOKEN missing");
-    if (!anthropic || !callback)
-      throw new Error("ANTHROPIC_API_KEY or WORKFLOW_CALLBACK_SECRET missing");
+    if (!lovable || !callback)
+      throw new Error("LOVABLE_API_KEY or WORKFLOW_CALLBACK_SECRET missing");
+
 
     const gh = async (path: string, init?: RequestInit) => {
       const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
@@ -80,10 +81,11 @@ export const setupGithubSecrets = createServerFn({ method: "POST" })
       });
     };
 
-    await putSecret("ANTHROPIC_API_KEY", anthropic);
+    await putSecret("LOVABLE_API_KEY", lovable);
     await putSecret("WORKFLOW_CALLBACK_SECRET", callback);
 
-    return { ok: true, secrets: ["ANTHROPIC_API_KEY", "WORKFLOW_CALLBACK_SECRET"] };
+    return { ok: true, secrets: ["LOVABLE_API_KEY", "WORKFLOW_CALLBACK_SECRET"] };
+
   });
 
 

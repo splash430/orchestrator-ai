@@ -82,6 +82,125 @@ export type Database = {
           },
         ]
       }
+      missions: {
+        Row: {
+          audience: string
+          country: string
+          created_at: string
+          duration_minutes: number
+          id: string
+          max_contacts: number
+          pace_per_minute: number
+          product_name: string
+          product_url: string
+          recency_minutes: number
+          scans: number
+          specifications: string
+          subreddits: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audience?: string
+          country?: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          max_contacts?: number
+          pace_per_minute?: number
+          product_name?: string
+          product_url?: string
+          recency_minutes?: number
+          scans?: number
+          specifications?: string
+          subreddits?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audience?: string
+          country?: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          max_contacts?: number
+          pace_per_minute?: number
+          product_name?: string
+          product_url?: string
+          recency_minutes?: number
+          scans?: number
+          specifications?: string
+          subreddits?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      prospects: {
+        Row: {
+          author: string | null
+          country_signal: string | null
+          created_at: string
+          excerpt: string | null
+          id: string
+          intent_score: number | null
+          message: string | null
+          post_url: string
+          posted_at: string | null
+          problem: string | null
+          run_id: string | null
+          source: string
+          status: string
+          subreddit: string | null
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          author?: string | null
+          country_signal?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          intent_score?: number | null
+          message?: string | null
+          post_url: string
+          posted_at?: string | null
+          problem?: string | null
+          run_id?: string | null
+          source?: string
+          status?: string
+          subreddit?: string | null
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          author?: string | null
+          country_signal?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          intent_score?: number | null
+          message?: string | null
+          post_url?: string
+          posted_at?: string | null
+          problem?: string | null
+          run_id?: string | null
+          source?: string
+          status?: string
+          subreddit?: string | null
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospects_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       run_events: {
         Row: {
           created_at: string

@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWireGithubRouteImport } from './routes/api/public/wire-github'
 import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,56 @@ const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/run-events' | '/api/public/wire-github'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/run-events' | '/api/public/wire-github'
-  id: '__root__' | '/' | '/api/public/run-events' | '/api/public/wire-github'
+  to: '/' | '/settings' | '/api/public/run-events' | '/api/public/wire-github'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
   ApiPublicWireGithubRoute: typeof ApiPublicWireGithubRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,19 +113,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
   ApiPublicWireGithubRoute: ApiPublicWireGithubRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

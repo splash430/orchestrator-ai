@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// One-shot admin endpoint: pushes ANTHROPIC_API_KEY + WORKFLOW_CALLBACK_SECRET
+// One-shot admin endpoint: pushes LOVABLE_API_KEY + WORKFLOW_CALLBACK_SECRET
 // into the configured GitHub repo's Actions secrets, verifies the workflow and
 // worker files are present, and can dispatch/poll a Playwright self-test run.
 // Only ever touches the pre-configured GITHUB_REPO.
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/public/wire-github")({
 
         const repo = process.env.GITHUB_REPO?.trim();
         const token = process.env.GITHUB_DISPATCH_TOKEN?.trim();
-        const anthropic = process.env.ANTHROPIC_API_KEY?.trim();
+        const lovableKey = process.env.LOVABLE_API_KEY?.trim();
         const callback = process.env.WORKFLOW_CALLBACK_SECRET;
 
 
@@ -95,7 +95,7 @@ export const Route = createFileRoute("/api/public/wire-github")({
         // 3. Push encrypted secrets (non-fatal: report and continue)
         const secrets: Array<{ name: string; ok: boolean; status: number; body?: string }> = [];
         let secretsError: Record<string, unknown> | undefined;
-        if (anthropic && callback) {
+        if (lovableKey && callback) {
           const keyRes = await gh("/actions/secrets/public-key");
           if (!keyRes.ok) {
             secretsError = {
@@ -111,7 +111,7 @@ export const Route = createFileRoute("/api/public/wire-github")({
           const keyBytes = sodium.from_base64(key, sodium.base64_variants.ORIGINAL);
 
           for (const [name, value] of [
-            ["ANTHROPIC_API_KEY", anthropic],
+            ["LOVABLE_API_KEY", lovableKey],
             ["WORKFLOW_CALLBACK_SECRET", callback],
           ] as const) {
             const enc = sodium.crypto_box_seal(sodium.from_string(value), keyBytes);
