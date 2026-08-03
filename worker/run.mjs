@@ -198,49 +198,46 @@ async function main() {
 
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      await logEvent("log", { message: `Claude turn ${turn + 1}` });
-      const response = await anthropic(history);
-      history.push({ role: "assistant", content: response.content });
+      await logEvent("log", { message: `Thinking (step ${turn + 1})` });
+      const msg = await llm(history);
+      history.push(msg);
 
-      for (const block of response.content) {
-        if (block.type === "text" && block.text.trim()) {
-          await logEvent("assistant_text", { text: block.text });
-          finalText = block.text;
-        }
+      if (msg.content && String(msg.content).trim()) {
+        await logEvent("assistant_text", { text: msg.content });
+        finalText = msg.content;
       }
 
-      if (response.stop_reason !== "tool_use") break;
+      const calls = msg.tool_calls ?? [];
+      if (calls.length === 0) break;
 
-      const toolResults = [];
-      for (const block of response.content) {
-        if (block.type !== "tool_use") continue;
-        await logEvent("tool_call", { name: block.name, input: block.input });
+      for (const call of calls) {
+        const name = call.function?.name;
+        let input = {};
         try {
-          const r = await runTool(block.name, block.input);
+          input = JSON.parse(call.function?.arguments || "{}");
+        } catch {}
+        await logEvent("tool_call", { name, input });
+        try {
+          const r = await runTool(name, input);
           if (r.screenshot) {
             await logEvent("screenshot", { data_url: `data:image/png;base64,${r.screenshot}` });
           }
           const preview =
-            block.name === "browse"
+            name === "browse"
               ? JSON.stringify({ url: r.url, title: r.title, text: r.text })
-              : block.name === "extract"
+              : name === "extract"
                 ? JSON.stringify({ items: r.items })
                 : JSON.stringify({ ok: true });
-          await logEvent("tool_result", { name: block.name, preview: preview.slice(0, 400) });
-          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: preview });
+          await logEvent("tool_result", { name, preview: preview.slice(0, 400) });
+          history.push({ role: "tool", tool_call_id: call.id, content: preview });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          await logEvent("error", { name: block.name, error: msg });
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: msg,
-            is_error: true,
-          });
+          const emsg = err instanceof Error ? err.message : String(err);
+          await logEvent("error", { name, error: emsg });
+          history.push({ role: "tool", tool_call_id: call.id, content: `ERROR: ${emsg}` });
         }
       }
-      history.push({ role: "user", content: toolResults });
     }
+
 
     await post({
       type: "final",
