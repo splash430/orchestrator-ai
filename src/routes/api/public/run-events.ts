@@ -1,6 +1,6 @@
 // Public callback endpoint invoked by the GitHub Actions worker to stream
-// events + final results back into the app. Verifies HMAC signature (shared
-// WORKFLOW_CALLBACK_SECRET) before writing to the database with admin creds.
+// events, prospects and final results back into the app. Verifies HMAC
+// signature (shared WORKFLOW_CALLBACK_SECRET) before writing with admin creds.
 
 import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -14,6 +14,14 @@ type EventPayload = {
   data: Record<string, unknown>;
 };
 
+type ProspectPayload = {
+  type: "prospect";
+  runId: string;
+  userId: string;
+  threadId: string;
+  prospect: Record<string, unknown>;
+};
+
 type FinalPayload = {
   type: "final";
   runId: string;
@@ -24,7 +32,7 @@ type FinalPayload = {
   error?: string;
 };
 
-type Payload = EventPayload | FinalPayload;
+type Payload = EventPayload | ProspectPayload | FinalPayload;
 
 function verifySignature(raw: string, sig: string | null, secret: string) {
   if (!sig) return false;
@@ -63,6 +71,30 @@ export const Route = createFileRoute("/api/public/run-events")({
             kind: body.kind,
             data: body.data as never,
           });
+          return Response.json({ ok: true });
+        }
+
+        if (body.type === "prospect") {
+          const p = body.prospect ?? {};
+          const { error } = await supabaseAdmin.from("prospects").upsert(
+            {
+              user_id: body.userId,
+              run_id: body.runId,
+              source: "reddit",
+              post_url: String(p.post_url ?? ""),
+              author: (p.author as string) ?? null,
+              subreddit: (p.subreddit as string) ?? null,
+              title: (p.title as string) ?? null,
+              excerpt: (p.excerpt as string) ?? null,
+              problem: (p.problem as string) ?? null,
+              message: (p.message as string) ?? null,
+              country_signal: (p.country_signal as string) ?? null,
+              intent_score: (p.intent_score as number) ?? null,
+              status: "generated",
+            },
+            { onConflict: "user_id,post_url", ignoreDuplicates: true },
+          );
+          if (error) console.error("prospect insert", error.message);
           return Response.json({ ok: true });
         }
 
