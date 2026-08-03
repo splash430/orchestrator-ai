@@ -1,15 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowUp,
-  Camera,
   Check,
+  Clock,
+  Copy,
+  ExternalLink,
   History,
   Loader2,
-  Plus,
-  Search,
-  Trash2,
+  MapPin,
+  Play,
+  Settings,
+  Sparkles,
+  Square,
+  Target,
   TriangleAlert,
+  Trash2,
+  Users,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -17,23 +24,24 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
-import { createThread, deleteThread, renameThread, runCommand } from "@/lib/orchestrator.functions";
+import { getMission, runMission, stopMission } from "@/lib/mission.functions";
+import { deleteThread, runCommand } from "@/lib/orchestrator.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Operator — tell the AI what to browse" },
+      { title: "Prospector — AI lead finder for your Business AI product" },
       {
         name: "description",
         content:
-          "One chat box. Ask the AI to browse Reddit or any site with Playwright and report back the results.",
+          "One button runs your saved mission: find recent Canadian Reddit posts asking for business AI, then write a tailored reply for each lead.",
       },
-      { property: "og:title", content: "Operator — tell the AI what to browse" },
+      { property: "og:title", content: "Prospector — AI lead finder" },
       {
         property: "og:description",
-        content: "One chat box for real browser automation: Reddit scans, research and drafts.",
+        content: "Run one saved mission to discover Canadian leads and personalised replies.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -42,22 +50,30 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+type Mission = Awaited<ReturnType<typeof getMission>>;
 type Thread = { id: string; title: string; updated_at: string };
 type Message = {
   id: string;
   thread_id: string;
-  role: "user" | "assistant" | "system";
+  role: string;
   content: { text?: string };
   created_at: string;
 };
-type RunEvent = { id: string; run_id: string; kind: string; data: Record<string, unknown> };
 type Run = { id: string; thread_id: string; status: string; command: string; created_at: string };
-
-const SUGGESTIONS = [
-  "Scan r/AI_Agents for the 5 newest posts about automation and summarise them",
-  "Open reddit.com/r/SaaS, find complaints about onboarding, draft 3 helpful replies",
-  "Search Google for 'AI automation agency pricing' and screenshot the top 3 pages",
-];
+type RunEvent = { id: string; run_id: string; kind: string; data: Record<string, unknown> };
+type Prospect = {
+  id: string;
+  post_url: string;
+  author: string | null;
+  subreddit: string | null;
+  title: string | null;
+  problem: string | null;
+  message: string | null;
+  country_signal: string | null;
+  intent_score: number | null;
+  status: string;
+  created_at: string;
+};
 
 function dedupe<T extends { id: string }>(rows: T[]) {
   const seen = new Set<string>();
@@ -66,34 +82,37 @@ function dedupe<T extends { id: string }>(rows: T[]) {
 
 function HomePage() {
   const { userId } = useSession();
+  const [mission, setMission] = useState<Mission | null>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [events, setEvents] = useState<RunEvent[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [extra, setExtra] = useState("");
+  const [starting, setStarting] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const createThreadFn = useServerFn(createThread);
-  const renameThreadFn = useServerFn(renameThread);
-  const deleteThreadFn = useServerFn(deleteThread);
+  const getMissionFn = useServerFn(getMission);
+  const runMissionFn = useServerFn(runMission);
+  const stopMissionFn = useServerFn(stopMission);
   const runCommandFn = useServerFn(runCommand);
+  const deleteThreadFn = useServerFn(deleteThread);
 
-  const boxRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history
   useEffect(() => {
     if (!userId) return;
+    getMissionFn().then(setMission).catch(() => {});
     supabase
       .from("threads")
       .select("id, title, updated_at")
       .order("updated_at", { ascending: false })
       .then(({ data }) => setThreads((data as Thread[]) ?? []));
-  }, [userId]);
+  }, [userId, getMissionFn]);
 
-  // Load + subscribe to the active conversation
+  // Active mission thread
   useEffect(() => {
     if (!activeId) {
       setMessages([]);
@@ -120,18 +139,7 @@ function HomePage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `thread_id=eq.${activeId}` },
-        (p) => {
-          const row = p.new as Message;
-          setMessages((prev) =>
-            dedupe([
-              // drop the optimistic copy of the same user message
-              ...prev.filter(
-                (m) => !(m.id.startsWith("tmp-") && m.role === row.role && m.content.text === row.content.text),
-              ),
-              row,
-            ]),
-          );
-        },
+        (p) => setMessages((prev) => dedupe([...prev, p.new as Message])),
       )
       .on(
         "postgres_changes",
@@ -142,14 +150,12 @@ function HomePage() {
         },
       )
       .subscribe();
-
     return () => {
       alive = false;
       supabase.removeChannel(ch);
     };
   }, [activeId]);
 
-  // Events for the runs in this conversation
   const runIds = useMemo(() => runs.map((r) => r.id).join(","), [runs]);
   useEffect(() => {
     if (!runIds) {
@@ -164,7 +170,6 @@ function HomePage() {
       .in("run_id", ids)
       .order("created_at", { ascending: true })
       .then(({ data }) => alive && setEvents(dedupe((data as RunEvent[]) ?? [])));
-
     const ch = supabase
       .channel(`events-${ids[0]}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "run_events" }, (p) => {
@@ -178,104 +183,119 @@ function HomePage() {
     };
   }, [runIds]);
 
+  // Leads (all-time, newest first) + realtime
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, events]);
+    if (!userId) return;
+    supabase
+      .from("prospects")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .then(({ data }) => setProspects((data as Prospect[]) ?? []));
+
+    const ch = supabase
+      .channel("prospects")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "prospects" }, (p) =>
+        setProspects((prev) => dedupe([p.new as Prospect, ...prev])),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId]);
 
   useEffect(() => {
-    boxRef.current?.focus();
-  }, [activeId, sending]);
+    if (activeId) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, events, activeId]);
 
-  const running = runs.some((r) => r.status === "running" || r.status === "pending");
-  const busy = sending || running;
+  const activeRun = runs.find((r) => r.status === "running" || r.status === "pending");
+  const running = !!activeRun || starting;
 
-  async function send(text: string) {
-    const command = text.trim();
-    if (!command || busy || !userId) return;
-    setSending(true);
-    setInput("");
+  const runProspects = activeRun
+    ? prospects.filter((p) => true)
+    : prospects;
+  const status = starting
+    ? "Starting"
+    : activeRun
+      ? "Running"
+      : runs.length
+        ? "Completed"
+        : "Ready";
 
-    let threadId = activeId;
+  async function start() {
+    if (running || !userId) return;
+    setError(null);
+    setStarting(true);
     try {
-      if (!threadId) {
-        const { id } = await createThreadFn({ data: {} });
-        threadId = id;
-        setThreads((t) => [
-          { id, title: command.slice(0, 60), updated_at: new Date().toISOString() },
-          ...t,
-        ]);
-        setActiveId(id);
-        renameThreadFn({ data: { id, title: command.slice(0, 60) } }).catch(() => {});
-      }
-
-      setMessages((m) =>
-        dedupe([
-          ...m,
-          {
-            id: `tmp-${crypto.randomUUID()}`,
-            thread_id: threadId!,
-            role: "user",
-            content: { text: command },
-            created_at: new Date().toISOString(),
-          },
-        ]),
-      );
-
-      await runCommandFn({ data: { threadId, command } });
-    } catch (e) {
-      setMessages((m) => [
-        ...m,
-        {
-          id: `err-${crypto.randomUUID()}`,
-          thread_id: threadId ?? "",
-          role: "assistant",
-          content: { text: `Couldn't start that task: ${e instanceof Error ? e.message : String(e)}` },
-          created_at: new Date().toISOString(),
-        },
+      const { threadId } = await runMissionFn({
+        data: { extraInstructions: extra.trim() || undefined },
+      });
+      setActiveId(threadId);
+      setExtra("");
+      setThreads((t) => [
+        { id: threadId, title: "Mission run", updated_at: new Date().toISOString() },
+        ...t.filter((x) => x.id !== threadId),
       ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSending(false);
+      setStarting(false);
     }
   }
 
-  async function removeThread(id: string) {
-    await deleteThreadFn({ data: { id } });
-    setThreads((t) => t.filter((x) => x.id !== id));
-    if (activeId === id) setActiveId(null);
+  async function stop() {
+    if (!activeRun) return;
+    await stopMissionFn({ data: { runId: activeRun.id } });
+    setRuns((prev) => prev.map((r) => (r.id === activeRun.id ? { ...r, status: "stopped" } : r)));
   }
 
-  const empty = messages.length === 0;
+  async function askInChat() {
+    const command = extra.trim();
+    if (!command || !userId) return;
+    setExtra("");
+    setStarting(true);
+    try {
+      const threadId = activeId;
+      if (!threadId) {
+        const { threadId: id } = await runMissionFn({ data: { extraInstructions: command } });
+        setActiveId(id);
+      } else {
+        await runCommandFn({ data: { threadId, command } });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  const searched = events.filter((e) => e.kind === "log").length;
+  const generated = runProspects.filter((p) => p.message).length;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      {/* Minimal top bar */}
-      <header className="flex items-center gap-2 px-4 py-3 md:px-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/80 px-4 py-3 backdrop-blur md:px-8">
         <div className="brand-gradient grid size-7 place-items-center rounded-lg text-primary-foreground">
-          <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-            <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <ellipse cx="12" cy="12" rx="3.1" ry="7" fill="none" stroke="currentColor" strokeWidth="1.4" />
-            <circle cx="12" cy="12" r="2.2" fill="currentColor" />
-          </svg>
+          <Target className="size-4" />
         </div>
-        <span className="text-sm font-semibold tracking-tight">Operator</span>
+        <span className="text-sm font-semibold tracking-tight">Prospector</span>
+        <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">
+          AI lead finder for {mission?.product_name ?? "your product"}
+        </span>
 
         <div className="ml-auto flex items-center gap-1">
-          {!empty && (
-            <Button variant="ghost" size="sm" className="gap-2" onClick={() => setActiveId(null)}>
-              <Plus className="size-4" /> New
-            </Button>
-          )}
           <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-2">
-                <History className="size-4" /> History
+                <History className="size-4" />
+                <span className="hidden sm:inline">History</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] p-0">
-              <SheetTitle className="border-b px-5 py-4 text-sm">Previous tasks</SheetTitle>
+            <SheetContent side="right" className="w-[320px] p-0">
+              <SheetTitle className="border-b px-5 py-4 text-sm">Previous missions</SheetTitle>
               <div className="overflow-auto p-2">
                 {threads.length === 0 && (
-                  <p className="p-3 text-sm text-muted-foreground">Nothing yet.</p>
+                  <p className="p-3 text-sm text-muted-foreground">No missions yet.</p>
                 )}
                 {threads.map((t) => (
                   <div
@@ -295,9 +315,13 @@ function HomePage() {
                       {t.title}
                     </button>
                     <button
-                      aria-label="Delete task"
-                      onClick={() => removeThread(t.id)}
-                      className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                      aria-label="Delete mission"
+                      onClick={async () => {
+                        await deleteThreadFn({ data: { id: t.id } });
+                        setThreads((prev) => prev.filter((x) => x.id !== t.id));
+                        if (activeId === t.id) setActiveId(null);
+                      }}
+                      className="text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -306,222 +330,285 @@ function HomePage() {
               </div>
             </SheetContent>
           </Sheet>
+          <Button asChild variant="ghost" size="sm" className="gap-2">
+            <Link to="/settings">
+              <Settings className="size-4" />
+              <span className="hidden sm:inline">Mission</span>
+            </Link>
+          </Button>
         </div>
       </header>
 
-      {empty ? (
-        /* ---------- Home: the one big chat box ---------- */
-        <main className="flex flex-1 flex-col items-center justify-center px-4 pb-16">
-          <div className="w-full max-w-2xl text-center">
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              What should I do in the browser?
-            </h1>
-            <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground md:text-base">
-              Type a task in plain English. I open a real browser with Playwright, do the work on
-              Reddit or any site, and report back here.
+      <main className="mx-auto max-w-3xl px-4 py-8 md:px-6 md:py-12">
+        {/* Mission card + the one button */}
+        <section className="surface p-6 md:p-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                status === "Running" || status === "Starting"
+                  ? "bg-primary/10 text-primary"
+                  : status === "Completed"
+                    ? "bg-success/10 text-success"
+                    : "bg-muted text-muted-foreground",
+              )}
+            >
+              {status === "Running" || status === "Starting" ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Check className="size-3" />
+              )}
+              {status}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin className="size-3" /> {mission?.country ?? "Canada"} only
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Users className="size-3" /> {mission?.max_contacts ?? 30} leads max
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="size-3" /> {mission?.duration_minutes ?? 40} min ·{" "}
+              {mission?.pace_per_minute ?? 1}/min
+            </span>
+          </div>
+
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight md:text-3xl">
+            Run your saved mission
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground md:text-base">
+            I scan Reddit for {mission?.country ?? "Canadian"} people who just asked for help with
+            bookings, scheduling, customer management or business AI — then write each one a tailored
+            reply pointing to{" "}
+            <a
+              href={mission?.product_url ?? "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-dotted underline-offset-4"
+            >
+              your product
+            </a>
+            .
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button size="lg" className="gap-2 px-6 text-base" onClick={start} disabled={running}>
+              {running ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <Play className="size-5" />
+              )}
+              {running ? "Mission running…" : "Run Mission"}
+            </Button>
+            {activeRun && (
+              <Button size="lg" variant="outline" className="gap-2" onClick={stop}>
+                <Square className="size-4" /> Stop
+              </Button>
+            )}
+            <Button asChild size="lg" variant="ghost" className="gap-2">
+              <Link to="/settings">
+                <Settings className="size-4" /> Edit mission
+              </Link>
+            </Button>
+          </div>
+
+          {/* Optional extra instructions for this run only */}
+          <div className="surface mt-6 flex items-end gap-2 border-dashed p-2">
+            <textarea
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  askInChat();
+                }
+              }}
+              rows={2}
+              placeholder="Optional: anything extra for this run (e.g. focus on salon and clinic owners in Ontario)"
+              className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <Button
+              size="icon"
+              variant="secondary"
+              className="size-9 shrink-0 rounded-xl"
+              onClick={askInChat}
+              disabled={!extra.trim() || starting}
+              aria-label="Send extra instructions"
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+          </div>
+
+          {error && (
+            <p className="mt-4 flex items-start gap-2 text-sm text-destructive">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {error}
             </p>
+          )}
+        </section>
 
-            <div className="mt-8">
-              <Composer
-                value={input}
-                onChange={setInput}
-                onSend={() => send(input)}
-                busy={busy}
-                inputRef={boxRef}
-                big
-              />
-            </div>
+        {/* Stats */}
+        <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Scans done" value={searched} />
+          <Stat label="Leads found" value={runProspects.length} />
+          <Stat label="Replies written" value={generated} />
+          <Stat
+            label="Target"
+            value={`${runProspects.length}/${mission?.max_contacts ?? 30}`}
+          />
+        </section>
 
-            <div className="mt-6 grid gap-2 text-left">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="surface lift px-4 py-3 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  {s}
-                </button>
+        {/* Live activity */}
+        {activeId && (events.length > 0 || messages.length > 0) && (
+          <section className="mt-6 space-y-3">
+            {messages
+              .filter((m) => m.role === "assistant")
+              .map((m) => (
+                <div key={m.id} className="surface whitespace-pre-wrap p-5 text-sm leading-relaxed">
+                  {m.content.text}
+                </div>
+              ))}
+            <details className="surface overflow-hidden text-sm">
+              <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-3 text-muted-foreground">
+                {activeRun ? (
+                  <Loader2 className="size-4 animate-spin text-primary" />
+                ) : (
+                  <Check className="size-4 text-success" />
+                )}
+                Live activity · {events.length} step{events.length === 1 ? "" : "s"}
+              </summary>
+              <ul className="space-y-1.5 border-t px-4 py-3 text-xs text-muted-foreground">
+                {events.slice(-60).map((e) => (
+                  <li key={e.id} className="break-words">
+                    {describe(e)}
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <div ref={bottomRef} />
+          </section>
+        )}
+
+        {/* Leads */}
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Leads &amp; ready-to-post replies
+          </h2>
+          {runProspects.length === 0 ? (
+            <p className="surface mt-3 p-5 text-sm text-muted-foreground">
+              No leads yet. Hit <strong>Run Mission</strong> — qualified {mission?.country ?? "Canadian"}{" "}
+              prospects appear here as they're found, each with a reply written for their exact
+              question.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {runProspects.map((p) => (
+                <LeadCard key={p.id} p={p} />
               ))}
             </div>
-          </div>
-        </main>
-      ) : (
-        /* ---------- Conversation ---------- */
-        <>
-          <main className="flex-1 overflow-auto px-4 md:px-6">
-            <div className="mx-auto flex max-w-2xl flex-col gap-6 py-6">
-              {messages.map((m) => {
-                const run = runs.find((r) => r.command === m.content.text);
-                const runEvents = run ? events.filter((e) => e.run_id === run.id) : [];
-                return (
-                  <div key={m.id} className="space-y-3">
-                    {m.role === "user" ? (
-                      <div className="flex justify-end">
-                        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-                          {m.content.text}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {m.content.text}
-                      </div>
-                    )}
-                    {runEvents.length > 0 && <Progress events={runEvents} status={run?.status} />}
-                    {run && run.status === "running" && runEvents.length === 0 && <Working />}
-                  </div>
-                );
-              })}
-              {sending && <Working />}
-              <div ref={bottomRef} />
-            </div>
-          </main>
-
-          <div className="sticky bottom-0 bg-gradient-to-t from-background via-background px-4 pb-5 pt-3 md:px-6">
-            <div className="mx-auto max-w-2xl">
-              <Composer
-                value={input}
-                onChange={setInput}
-                onSend={() => send(input)}
-                busy={busy}
-                inputRef={boxRef}
-              />
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function Composer({
-  value,
-  onChange,
-  onSend,
-  busy,
-  inputRef,
-  big = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSend: () => void;
-  busy: boolean;
-  inputRef: React.RefObject<HTMLTextAreaElement | null>;
-  big?: boolean;
-}) {
-  return (
-    <div className="surface relative flex items-end gap-2 p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring/40">
-      <textarea
-        ref={inputRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        rows={big ? 3 : 2}
-        placeholder="e.g. scan r/AI_Agents for new automation posts and draft replies"
-        className={cn(
-          "max-h-48 flex-1 resize-none bg-transparent px-3 py-2 outline-none placeholder:text-muted-foreground",
-          big ? "text-base" : "text-sm",
-        )}
-      />
-      <Button
-        size="icon"
-        className="size-9 shrink-0 rounded-xl"
-        onClick={onSend}
-        disabled={busy || !value.trim()}
-        aria-label="Send task"
-      >
-        {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
-      </Button>
-    </div>
-  );
-}
-
-function Working() {
-  return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" /> Working on it…
-    </div>
-  );
-}
-
-/** Friendly, collapsed-by-default view of what the browser actually did. */
-function Progress({ events, status }: { events: RunEvent[]; status?: string }) {
-  const shots = events.filter((e) => e.kind === "screenshot" && e.data.data_url);
-  const errors = events.filter((e) => e.kind === "error");
-  const steps = events.filter((e) => e.kind === "tool_call").length;
-
-  return (
-    <div className="space-y-3">
-      <details className="surface overflow-hidden text-sm">
-        <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-2.5 text-muted-foreground">
-          {status === "running" ? (
-            <Loader2 className="size-4 animate-spin text-primary" />
-          ) : errors.length ? (
-            <TriangleAlert className="size-4 text-destructive" />
-          ) : (
-            <Check className="size-4 text-success" />
           )}
-          <span>
-            {status === "running" ? "Browsing" : errors.length ? "Finished with an issue" : "Done"}
-            {steps > 0 && ` · ${steps} browser step${steps === 1 ? "" : "s"}`}
-          </span>
-        </summary>
-        <ul className="space-y-1.5 border-t px-4 py-3 text-xs text-muted-foreground">
-          {events.map((e) => (
-            <li key={e.id} className="flex items-start gap-2">
-              <Search className="mt-0.5 size-3 shrink-0" />
-              <span className="min-w-0 break-words">{describe(e)}</span>
-            </li>
-          ))}
-        </ul>
-      </details>
+        </section>
+      </main>
+    </div>
+  );
+}
 
-      {shots.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {shots.map((s) => (
-            <figure key={s.id} className="surface overflow-hidden">
-              <img
-                src={String(s.data.data_url)}
-                alt="Browser screenshot captured by the assistant"
-                loading="lazy"
-                className="w-full object-cover"
-              />
-              <figcaption className="flex items-center gap-1.5 px-3 py-2 text-xs text-muted-foreground">
-                <Camera className="size-3" /> Page screenshot
-              </figcaption>
-            </figure>
-          ))}
-        </div>
+function Stat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="surface p-4">
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function LeadCard({ p }: { p: Prospect }) {
+  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState(p.status);
+
+  async function mark(next: string) {
+    setStatus(next);
+    await supabase
+      .from("prospects")
+      .update({ status: next, posted_at: next === "sent" ? new Date().toISOString() : null })
+      .eq("id", p.id);
+  }
+
+  return (
+    <article className="surface p-5">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">u/{p.author ?? "unknown"}</span>
+        {p.subreddit && <span>· r/{p.subreddit}</span>}
+        {typeof p.intent_score === "number" && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+            intent {p.intent_score}
+          </span>
+        )}
+        {p.country_signal && (
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="size-3" /> {p.country_signal}
+          </span>
+        )}
+        <span
+          className={cn(
+            "ml-auto rounded-full px-2 py-0.5",
+            status === "sent" ? "bg-success/10 text-success" : "bg-muted",
+          )}
+        >
+          {status}
+        </span>
+      </div>
+
+      {p.title && <h3 className="mt-2 text-sm font-medium leading-snug">{p.title}</h3>}
+      {p.problem && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          <Sparkles className="mr-1 inline size-3" />
+          {p.problem}
+        </p>
       )}
 
-      {errors.map((e) => (
-        <p key={e.id} className="text-xs text-destructive">
-          {String(e.data.error ?? "Something went wrong")}
+      {p.message && (
+        <p className="mt-3 whitespace-pre-wrap rounded-xl bg-muted/60 p-3 text-sm leading-relaxed">
+          {p.message}
         </p>
-      ))}
-    </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="gap-2"
+          onClick={() => {
+            navigator.clipboard.writeText(p.message ?? "");
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          {copied ? "Copied" : "Copy reply"}
+        </Button>
+        <Button asChild size="sm" variant="outline" className="gap-2">
+          <a href={p.post_url} target="_blank" rel="noreferrer">
+            <ExternalLink className="size-4" /> Open post
+          </a>
+        </Button>
+        {status !== "sent" && (
+          <Button size="sm" variant="ghost" className="gap-2" onClick={() => mark("sent")}>
+            <Check className="size-4" /> Mark as posted
+          </Button>
+        )}
+      </div>
+    </article>
   );
 }
 
 function describe(e: RunEvent) {
-  const name = String(e.data.name ?? "").toLowerCase();
-  switch (e.kind) {
-    case "tool_call":
-      if (name.includes("browse") || name.includes("goto")) return `Opening ${String((e.data.input as Record<string, unknown>)?.url ?? "a page")}`;
-      if (name.includes("extract") || name.includes("read")) return "Reading the page content";
-      if (name.includes("screenshot")) return "Taking a screenshot";
-      return `Using ${name || "the browser"}`;
-    case "tool_result":
-      return "Got the results back";
-    case "screenshot":
-      return "Captured a screenshot";
-    case "error":
-      return String(e.data.error ?? "error");
-    default:
-      return String(e.data.message ?? e.kind);
-  }
+  const d = e.data ?? {};
+  if (e.kind === "log") return String(d.message ?? "Working…");
+  if (e.kind === "prospect_found")
+    return `Lead #${d.count}: u/${d.author} in r/${d.subreddit} (intent ${d.intent_score})`;
+  if (e.kind === "mission_start")
+    return `Mission started — up to ${d.maxContacts} ${d.country} leads over ${d.durationMinutes} min`;
+  if (e.kind === "screenshot") return "Captured a browser screenshot";
+  if (e.kind === "tool_call") return `Browser: ${String(d.name)}`;
+  if (e.kind === "error") return `Issue: ${String(d.error ?? d.name)}`;
+  return e.kind;
 }
