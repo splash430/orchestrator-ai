@@ -29,7 +29,7 @@ export const getGithubStatus = createServerFn({ method: "GET" })
     return {
       repo: process.env.GITHUB_REPO ?? null,
       hasToken: !!process.env.GITHUB_DISPATCH_TOKEN,
-      hasAnthropic: !!process.env.ANTHROPIC_API_KEY,
+      hasAi: !!process.env.LOVABLE_API_KEY,
       hasCallbackSecret: !!process.env.WORKFLOW_CALLBACK_SECRET,
     };
   });
