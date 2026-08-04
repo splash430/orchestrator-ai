@@ -81,12 +81,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Chat with Claude and let it drive a real headless browser to browse, extract, and screenshot the web.",
+          "Find Canadian business owners asking for AI and automation on Reddit, then get a tailored reply written for each one.",
       },
       { property: "og:title", content: "Operator — AI browser control" },
       {
         property: "og:description",
-        content: "Give Claude a browser. Automate the web from a chat box.",
+        content: "One button: parallel Reddit scanners find buyers and draft your replies.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

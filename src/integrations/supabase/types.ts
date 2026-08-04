@@ -85,6 +85,7 @@ export type Database = {
       missions: {
         Row: {
           audience: string
+          contact_gap_seconds: number
           country: string
           created_at: string
           duration_minutes: number
@@ -102,6 +103,7 @@ export type Database = {
         }
         Insert: {
           audience?: string
+          contact_gap_seconds?: number
           country?: string
           created_at?: string
           duration_minutes?: number
@@ -119,6 +121,7 @@ export type Database = {
         }
         Update: {
           audience?: string
+          contact_gap_seconds?: number
           country?: string
           created_at?: string
           duration_minutes?: number

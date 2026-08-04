@@ -72,6 +72,7 @@ function SettingsPage() {
           duration_minutes: Number(form.duration_minutes),
           scans: Number(form.scans),
           pace_per_minute: Number(form.pace_per_minute),
+          contact_gap_seconds: Math.round(Number(form.contact_gap_seconds)),
           recency_minutes: Number(form.recency_minutes),
           subreddits: form.subreddits,
           specifications: form.specifications ?? "",
@@ -174,13 +175,19 @@ function SettingsPage() {
                     onChange={(e) => set("max_contacts", Number(e.target.value))}
                   />
                 </Field>
-                <Field label="Replies per minute" hint="Keep it at 1 to stay safe.">
+                <Field
+                  label="Minutes between replies"
+                  hint="2.5 minutes = about 24 replies an hour. Slower is safer."
+                >
                   <Input
                     type="number"
-                    min={1}
-                    max={10}
-                    value={form.pace_per_minute}
-                    onChange={(e) => set("pace_per_minute", Number(e.target.value))}
+                    step={0.5}
+                    min={0.5}
+                    max={60}
+                    value={form.contact_gap_seconds / 60}
+                    onChange={(e) =>
+                      set("contact_gap_seconds", Math.round(Number(e.target.value) * 60))
+                    }
                   />
                 </Field>
                 <Field label="How long should it run? (minutes)">

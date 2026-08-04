@@ -6,7 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // GitHub-Actions-backed orchestrator: each `runCommand` dispatches a
 // workflow (`.github/workflows/run-command.yml`) in the user's repo that
-// runs the Claude + Playwright loop and streams events back to
+// runs the Lovable AI + Playwright loop and streams events back to
 // `/api/public/run-events`.
 
 function callbackUrl() {

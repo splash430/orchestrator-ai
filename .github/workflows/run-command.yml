@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       command:
-        description: User command for Claude
+        description: User command for the AI worker
         required: true
         type: string
       callback_url:

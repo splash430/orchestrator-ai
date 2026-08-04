@@ -30,10 +30,10 @@ jobs:
 
       - name: Check required secrets are present
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LOVABLE_API_KEY: ${{ secrets.LOVABLE_API_KEY }}
           WORKFLOW_CALLBACK_SECRET: ${{ secrets.WORKFLOW_CALLBACK_SECRET }}
         run: |
-          test -n "$ANTHROPIC_API_KEY" || { echo "ANTHROPIC_API_KEY missing"; exit 1; }
+          test -n "$LOVABLE_API_KEY" || { echo "LOVABLE_API_KEY missing"; exit 1; }
           test -n "$WORKFLOW_CALLBACK_SECRET" || { echo "WORKFLOW_CALLBACK_SECRET missing"; exit 1; }
           echo "both required secrets are present"
 
