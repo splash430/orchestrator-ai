@@ -141,9 +141,11 @@ export type Database = {
       }
       prospects: {
         Row: {
+          approved_at: string | null
           author: string | null
           country_signal: string | null
           created_at: string
+          drafted_at: string | null
           excerpt: string | null
           id: string
           intent_score: number | null
@@ -151,17 +153,23 @@ export type Database = {
           post_url: string
           posted_at: string | null
           problem: string | null
+          qualification_reason: string | null
+          rejected: boolean
+          rejection_reason: string | null
           run_id: string | null
           source: string
           status: string
           subreddit: string | null
+          summary: string | null
           title: string | null
           user_id: string
         }
         Insert: {
+          approved_at?: string | null
           author?: string | null
           country_signal?: string | null
           created_at?: string
+          drafted_at?: string | null
           excerpt?: string | null
           id?: string
           intent_score?: number | null
@@ -169,17 +177,23 @@ export type Database = {
           post_url: string
           posted_at?: string | null
           problem?: string | null
+          qualification_reason?: string | null
+          rejected?: boolean
+          rejection_reason?: string | null
           run_id?: string | null
           source?: string
           status?: string
           subreddit?: string | null
+          summary?: string | null
           title?: string | null
           user_id: string
         }
         Update: {
+          approved_at?: string | null
           author?: string | null
           country_signal?: string | null
           created_at?: string
+          drafted_at?: string | null
           excerpt?: string | null
           id?: string
           intent_score?: number | null
@@ -187,10 +201,14 @@ export type Database = {
           post_url?: string
           posted_at?: string | null
           problem?: string | null
+          qualification_reason?: string | null
+          rejected?: boolean
+          rejection_reason?: string | null
           run_id?: string | null
           source?: string
           status?: string
           subreddit?: string | null
+          summary?: string | null
           title?: string | null
           user_id?: string
         }
