@@ -1,8 +1,11 @@
-// Reddit prospecting mission runner. Runs inside GitHub Actions
-// (.github/workflows/run-mission.yml) on GitHub's servers — so it keeps running
-// even if the operator closes the browser tab. Drives a real browser with
-// Playwright, uses Lovable AI to qualify leads + write personalised replies,
-// and streams every event back to the app over a signed HTTPS callback.
+// Reddit JOB FINDER — discovery only. Runs inside GitHub Actions
+// (.github/workflows/run-mission.yml) so it keeps working after the operator
+// closes the tab. Fires 40 parallel Playwright scanners at Reddit, qualifies
+// every candidate with Lovable AI, and streams progress + leads back to the
+// app over a signed HTTPS callback.
+//
+// It NEVER posts a comment or sends a DM. Outreach drafts are generated in the
+// app only after the operator approves a lead.
 
 import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
@@ -32,46 +35,50 @@ for (const [k, v] of Object.entries({
   }
 }
 
-function clamp(n, lo, hi) {
-  return Math.max(lo, Math.min(hi, n));
-}
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const mission = JSON.parse(MISSION);
+
+const KEYWORDS = [
+  "AI chatbot",
+  "AI automation",
+  "AI agent",
+  "lead generation AI",
+  "appointment booking AI",
+  "customer support AI",
+  "sales automation",
+  "CRM automation",
+  "workflow automation",
+  "business automation",
+];
+
+const DEFAULT_SUBS = [
+  "smallbusiness",
+  "Entrepreneur",
+  "SaaS",
+  "startups",
+  "automation",
+  "Business_Ideas",
+  "ArtificialInteligence",
+  "leadgeneration",
+  "sales",
+];
+
 const cfg = {
   productName: mission.product_name || "Business AI solutions",
   productUrl: mission.product_url || "https://splashdevelopmentwebsite.base44.app",
-  audience: mission.audience || "Canadian business owners",
-  country: mission.country || "Canada",
-  maxContacts: clamp(Number(mission.max_contacts) || 30, 1, 200),
-  durationMinutes: clamp(Number(mission.duration_minutes) || 240, 1, 240),
-  scans: clamp(Number(mission.scans) || 30, 1, 200),
-  contactGapMs: clamp(Number(mission.contact_gap_seconds) || 150, 15, 3600) * 1000,
-  recencyMinutes: clamp(Number(mission.recency_minutes) || 180, 5, 1440),
-  subreddits: (mission.subreddits?.length ? mission.subreddits : ["smallbusiness"]).slice(0, 20),
+  audience: mission.audience || "business owners looking to buy AI automation",
+  country: mission.country || "",
+  maxLeads: clamp(Number(mission.max_contacts) || 30, 1, 200),
+  recencyMinutes: clamp(Number(mission.recency_minutes) || 360, 30, 1440),
+  subreddits: (mission.subreddits?.length ? mission.subreddits : DEFAULT_SUBS).slice(0, 24),
   specifications: mission.specifications || "",
   extra: mission.extra_instructions || "",
 };
 
-const deadline = Date.now() + cfg.durationMinutes * 60_000;
-const PARALLEL_SCANNERS = 6;
-
-const QUERIES = [
-  "looking for booking software",
-  "need appointment scheduling software",
-  "recommend crm small business",
-  "automate my business",
-  "AI tool for my business",
-  "help managing bookings",
-  "scheduling nightmare clients",
-  "software recommendation small business",
-  "need help with customer management",
-  "any AI tools for admin work",
-  "AI automation for my business",
-  "hire someone to automate",
-  "chatbot for my business",
-  "drowning in admin work",
-  "missed calls losing customers",
-];
+const SCANNERS = 40;
+const HARD_DEADLINE = Date.now() + 20 * 60_000;
 
 /* ---------------- callback plumbing ---------------- */
 
@@ -93,15 +100,12 @@ async function post(body) {
 const logEvent = (kind, data) =>
   post({ type: "event", runId: RUN_ID, userId: USER_ID, threadId: THREAD_ID, kind, data });
 
-/* ---------------- Lovable AI ---------------- */
+/* ---------------- Lovable AI qualification ---------------- */
 
 async function ai(system, user) {
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "Lovable-API-Key": LOVABLE_API_KEY,
-    },
+    headers: { "content-type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
     body: JSON.stringify({
       model: "openai/gpt-5.6-sol",
       reasoning_effort: "none",
@@ -114,8 +118,7 @@ async function ai(system, user) {
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`ai gateway ${res.status}: ${text.slice(0, 300)}`);
-  const json = JSON.parse(text);
-  const content = json.choices?.[0]?.message?.content ?? "{}";
+  const content = JSON.parse(text).choices?.[0]?.message?.content ?? "{}";
   try {
     return JSON.parse(content);
   } catch {
@@ -124,28 +127,21 @@ async function ai(system, user) {
   }
 }
 
-const QUALIFY_SYSTEM = `You qualify Reddit posts as sales leads for a business-AI product and write one genuinely helpful reply that answers the person's actual question.
+const QUALIFY_SYSTEM = `You are a lead qualifier for a business-AI product. You read one Reddit post and decide whether the AUTHOR is actively looking to hire, buy, or get recommendations for an AI / automation solution.
 
-Product: ${cfg.productName}
-Product URL: ${cfg.productUrl}
-Ideal prospect: ${cfg.audience}
-Country requirement: the poster must plausibly be in ${cfg.country}. Look for explicit signals (province/city names, "Canada", CAD, GST/HST, Canadian subreddits). If there is no signal at all, treat it as not qualified.
-Extra instructions from the operator: ${cfg.specifications} ${cfg.extra}
+Product being sold: ${cfg.productName} (${cfg.productUrl})
+Ideal buyer: ${cfg.audience}
+${cfg.country ? `Preferred location: ${cfg.country} (a location match raises intent_score, it is NOT required).` : ""}
+Operator notes: ${cfg.specifications} ${cfg.extra}
 
-Understand meaning, not keywords: qualify people who are shopping for or asking about business AI / automation, booking-scheduling-CRM software, or are drowning in admin. Do NOT qualify job posts, self-promotion, memes, or people with no real need.
+QUALIFY only when the author is: asking for a tool/vendor/agency recommendation, asking how to automate a real business problem they own, asking to hire someone to build it, or comparing products to buy.
 
-WRITING RULES — this must not read like AI:
-- Answer their question first, in plain spoken English, like one business owner replying to another.
-- Reference a concrete detail from their post (their trade, their city, the exact bottleneck, the tool they named).
-- 2-4 short sentences. Contractions. No bullet lists.
-- BANNED words and shapes: "I hope this helps", "Great question", "Hi there", "As an AI", "leverage", "streamline", "seamless", "robust", "in today's fast-paced", "elevate", "unlock", "game-changer", "delve", "furthermore", "moreover", em dashes used as drama, emoji, hashtags, exclamation marks.
-- No sales pitch language and no feature lists. Mention that you build this kind of thing and drop the URL once, casually, at the end.
-- Every reply must be worded completely differently from any other reply. Vary sentence length and openers; never start two replies the same way.
+REJECT: people selling or promoting their own product, agency self-promo, job listings hiring employees, memes, "I built this" show-offs, general news or opinion about AI, students, resellers, and anything with no real business need.
 
 Answer strictly as JSON:
-{"qualified": boolean, "intent_score": 0-100, "country_signal": "short reason or empty", "problem": "one line", "message": "the reply, empty if not qualified"}`;
+{"qualified": boolean, "intent_score": 0-100, "summary": "one sentence describing what they are asking for", "qualification_reason": "why this is a buying-intent lead, quoting a concrete detail from the post", "rejection_reason": "if not qualified, the exact reason", "country_signal": "location evidence or empty"}`;
 
-/* ---------------- Reddit discovery via Playwright ---------------- */
+/* ---------------- Playwright scanning ---------------- */
 
 let browser;
 async function getBrowser() {
@@ -165,15 +161,13 @@ async function newScanner() {
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
     viewport: { width: 1280, height: 900 },
   });
-  const page = await context.newPage();
-  return { context, page };
+  return { context, page: await context.newPage() };
 }
 
 async function fetchJson(page, url) {
   const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  if (!res || !res.ok()) throw new Error(`reddit ${res?.status()} for ${url}`);
-  const body = await page.evaluate(() => document.body?.innerText || "");
-  return JSON.parse(body);
+  if (!res || !res.ok()) throw new Error(`reddit ${res?.status()}`);
+  return JSON.parse(await page.evaluate(() => document.body?.innerText || ""));
 }
 
 function normalise(children) {
@@ -181,7 +175,6 @@ function normalise(children) {
     .map((c) => c.data)
     .filter(Boolean)
     .map((d) => ({
-      id: d.id,
       url: `https://www.reddit.com${d.permalink}`,
       author: d.author,
       subreddit: d.subreddit,
@@ -192,122 +185,138 @@ function normalise(children) {
     .filter((p) => p.url && p.author && p.author !== "[deleted]");
 }
 
-function scanUrls() {
-  const urls = [];
-  for (const q of QUERIES) {
-    urls.push(`https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&t=day&limit=25`);
+/** Builds >=40 independent search streams: keyword searches, subreddit feeds
+ *  and keyword-scoped subreddit searches. */
+function buildStreams() {
+  const streams = [];
+  for (const q of KEYWORDS) {
+    streams.push({
+      label: `search "${q}"`,
+      url: `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&t=day&limit=50`,
+    });
+    streams.push({
+      label: `search "${q}" (recommendations)`,
+      url: `https://www.reddit.com/search.json?q=${encodeURIComponent(`${q} recommendations`)}&sort=new&t=day&limit=50`,
+    });
   }
   for (const sub of cfg.subreddits) {
-    urls.push(`https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=25`);
+    streams.push({ label: `r/${sub} new`, url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=50` });
+    streams.push({
+      label: `r/${sub} AI search`,
+      url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/search.json?q=${encodeURIComponent("AI automation OR chatbot OR automate")}&restrict_sr=1&sort=new&t=week&limit=50`,
+    });
   }
-  return urls;
+  return streams;
 }
 
-/** Fires PARALLEL_SCANNERS browser tabs at Reddit at once — seconds, not minutes. */
-async function discover(seenUrls) {
-  const urls = scanUrls();
-  const cutoff = Date.now() - cfg.recencyMinutes * 60_000;
-  const found = [];
-  let cursor = 0;
-
-  await logEvent("log", {
-    message: `Launching ${PARALLEL_SCANNERS} parallel scanners across ${urls.length} Reddit feeds…`,
-  });
-
-  const workers = Array.from({ length: PARALLEL_SCANNERS }, async () => {
-    const { context, page } = await newScanner();
-    try {
-      while (true) {
-        const i = cursor++;
-        if (i >= urls.length || Date.now() > deadline) break;
-        const url = urls[i];
-        try {
-          const json = await fetchJson(page, url);
-          for (const p of normalise(json?.data?.children)) {
-            if (seenUrls.has(p.url)) continue;
-            seenUrls.add(p.url);
-            if (p.createdMs && p.createdMs < cutoff) continue;
-            found.push(p);
-          }
-        } catch (e) {
-          console.error("scan failed", url, e?.message);
-        }
-      }
-    } finally {
-      await context.close().catch(() => {});
-    }
-  });
-
-  await Promise.all(workers);
-  found.sort((a, b) => b.createdMs - a.createdMs);
-  await logEvent("log", {
-    message: `Scan complete — ${found.length} fresh conversation${found.length === 1 ? "" : "s"} collected.`,
-  });
-  return found;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/* ---------------- main mission loop ---------------- */
+/* ---------------- main ---------------- */
 
 async function main() {
-  let contacted = 0;
-  let reviewed = 0;
-  let cycles = 0;
-  const seenUrls = new Set();
+  const streams = buildStreams();
+  const cutoff = Date.now() - cfg.recencyMinutes * 60_000;
+  const seen = new Set();
+  const candidates = [];
+  const rejections = [];
+  let leads = 0;
+  let evaluated = 0;
+  let done = 0;
 
   try {
     await logEvent("mission_start", {
-      maxContacts: cfg.maxContacts,
-      durationMinutes: cfg.durationMinutes,
-      country: cfg.country,
-      contactGapSeconds: Math.round(cfg.contactGapMs / 1000),
-      parallelScanners: PARALLEL_SCANNERS,
+      scanners: SCANNERS,
+      streams: streams.length,
+      keywords: KEYWORDS,
+      subreddits: cfg.subreddits,
+      recencyMinutes: cfg.recencyMinutes,
+      maxLeads: cfg.maxLeads,
     });
 
-    // Proof-of-browser screenshot, taken once up front.
-    try {
+    const progress = (phase, extra = {}) =>
+      logEvent("progress", {
+        phase,
+        streams_done: done,
+        streams_total: streams.length,
+        candidates: candidates.length,
+        evaluated,
+        leads,
+        ...extra,
+      });
+
+    await progress("launching");
+
+    // Phase 1 — 40 parallel scanners tear through every stream.
+    let cursor = 0;
+    const workers = Array.from({ length: SCANNERS }, async () => {
       const { context, page } = await newScanner();
-      await page.goto("https://www.reddit.com/r/smallbusiness/new/", {
-        waitUntil: "domcontentloaded",
-        timeout: 45_000,
-      });
-      const shot = await page.screenshot({ type: "png" });
-      await logEvent("screenshot", {
-        data_url: `data:image/png;base64,${shot.toString("base64")}`,
-      });
-      await context.close().catch(() => {});
-    } catch {}
+      try {
+        while (true) {
+          const i = cursor++;
+          if (i >= streams.length || Date.now() > HARD_DEADLINE) break;
+          const s = streams[i];
+          try {
+            const json = await fetchJson(page, s.url);
+            let fresh = 0;
+            for (const p of normalise(json?.data?.children)) {
+              if (seen.has(p.url)) continue;
+              seen.add(p.url);
+              if (p.createdMs && p.createdMs < cutoff) continue;
+              candidates.push(p);
+              fresh++;
+            }
+            done++;
+            await progress("scanning", { stream: s.label, fresh });
+          } catch (e) {
+            done++;
+            await progress("scanning", { stream: s.label, error: String(e?.message).slice(0, 120) });
+          }
+        }
+      } finally {
+        await context.close().catch(() => {});
+      }
+    });
+    await Promise.all(workers);
 
-    // Scan → contact → repeat, until the campaign window closes.
-    while (Date.now() < deadline) {
-      cycles++;
-      await logEvent("log", { message: `Scan cycle ${cycles} starting.` });
+    candidates.sort((a, b) => b.createdMs - a.createdMs);
+    await logEvent("log", {
+      message: `${done}/${streams.length} streams scanned · ${candidates.length} fresh posts collected. Qualifying now…`,
+    });
+    await progress("qualifying");
 
-      const candidates = (await discover(seenUrls)).slice(0, cfg.scans * 4);
-      let contactedThisCycle = 0;
-
-      for (const p of candidates) {
-        if (Date.now() > deadline) break;
-        if (contacted >= cfg.maxContacts * 8) break;
-        if (contactedThisCycle >= cfg.maxContacts) break;
-
-        reviewed++;
-        let verdict;
+    // Phase 2 — qualify in small parallel batches.
+    const queue = candidates.slice(0, 400);
+    let qcursor = 0;
+    const qualifiers = Array.from({ length: 6 }, async () => {
+      while (true) {
+        const i = qcursor++;
+        if (i >= queue.length || leads >= cfg.maxLeads || Date.now() > HARD_DEADLINE) break;
+        const p = queue[i];
+        let v;
         try {
-          verdict = await ai(
+          v = await ai(
             QUALIFY_SYSTEM,
             `Subreddit: r/${p.subreddit}\nAuthor: u/${p.author}\nPosted: ${new Date(p.createdMs).toISOString()}\nTitle: ${p.title}\nBody: ${p.body}`,
           );
         } catch (e) {
-          await logEvent("log", { message: `Qualification failed: ${e.message.slice(0, 140)}` });
+          console.error("qualify failed", e?.message);
+          continue;
+        }
+        evaluated++;
+
+        if (!v.qualified) {
+          if (rejections.length < 40) {
+            rejections.push({
+              author: p.author,
+              subreddit: p.subreddit,
+              title: p.title.slice(0, 140),
+              url: p.url,
+              reason: String(v.rejection_reason || "No buying intent for an AI solution").slice(0, 240),
+            });
+          }
+          await progress("qualifying");
           continue;
         }
 
-        if (!verdict.qualified || !verdict.message) continue;
-
-        contacted++;
-        contactedThisCycle++;
+        leads++;
         await post({
           type: "prospect",
           runId: RUN_ID,
@@ -318,53 +327,61 @@ async function main() {
             author: p.author,
             subreddit: p.subreddit,
             title: p.title.slice(0, 300),
-            excerpt: p.body.slice(0, 400),
-            problem: String(verdict.problem || "").slice(0, 300),
-            message: String(verdict.message).slice(0, 2000),
-            country_signal: String(verdict.country_signal || "").slice(0, 200),
-            intent_score: Math.round(Number(verdict.intent_score) || 0),
+            excerpt: p.body.slice(0, 600),
+            summary: String(v.summary || "").slice(0, 400),
+            qualification_reason: String(v.qualification_reason || "").slice(0, 400),
+            problem: String(v.summary || "").slice(0, 300),
+            country_signal: String(v.country_signal || "").slice(0, 200),
+            intent_score: Math.round(Number(v.intent_score) || 0),
+            posted_at: new Date(p.createdMs || Date.now()).toISOString(),
           },
         });
         await logEvent("prospect_found", {
           author: p.author,
           subreddit: p.subreddit,
           url: p.url,
-          intent_score: Math.round(Number(verdict.intent_score) || 0),
-          count: contacted,
+          intent_score: Math.round(Number(v.intent_score) || 0),
+          count: leads,
         });
-
-        // Pace outreach: one lead every contactGapMs.
-        const jitter = Math.round(Math.random() * 15_000);
-        if (Date.now() + cfg.contactGapMs + jitter < deadline) {
-          await sleep(cfg.contactGapMs + jitter);
-        } else {
-          break;
-        }
+        await progress("qualifying");
       }
+    });
+    await Promise.all(qualifiers);
 
-      if (Date.now() >= deadline) break;
-      if (!contactedThisCycle) {
-        await logEvent("log", {
-          message: "No new qualified conversation this cycle — pausing 5 minutes, then scanning again.",
-        });
-        await sleep(Math.min(5 * 60_000, Math.max(0, deadline - Date.now())));
-      }
-    }
+    await progress("done");
 
-    const hours = Math.round((cfg.durationMinutes / 60) * 10) / 10;
-    const summary = [
-      `**Mission complete — ${contacted} lead${contacted === 1 ? "" : "s"} ready.**`,
-      "",
-      `- Scan cycles run: ${cycles} over ${hours}h`,
-      `- Conversations reviewed: ${reviewed}`,
-      `- Qualified ${cfg.country} prospects queued: ${contacted}`,
-      `- Pace: one reply every ${Math.round(cfg.contactGapMs / 6000) / 10} min`,
-      `- Product linked: ${cfg.productUrl}`,
-      "",
-      contacted
-        ? "Each lead below has a reply written for their exact question — open the thread and post it as yourself."
-        : "No fresh conversation met the intent + country bar in this window. Widen the recency window or add subreddits in Mission settings.",
-    ].join("\n");
+    const summary = leads
+      ? [
+          `**Scan complete — ${leads} qualified lead${leads === 1 ? "" : "s"} found.**`,
+          "",
+          `- ${done}/${streams.length} parallel search streams scanned (${SCANNERS} scanners)`,
+          `- ${candidates.length} fresh posts collected from the last ${Math.round(cfg.recencyMinutes / 60)}h`,
+          `- ${evaluated} posts evaluated for buying intent`,
+          `- ${leads} leads saved and waiting for your approval`,
+          "",
+          "No message was sent. Open a lead card and hit **Approve & draft reply** when you're ready.",
+        ].join("\n")
+      : [
+          `**Scan complete — no qualified leads this pass.**`,
+          "",
+          `- Subreddits searched: ${cfg.subreddits.map((s) => `r/${s}`).join(", ")}`,
+          `- Keywords searched: ${KEYWORDS.join(", ")}`,
+          `- ${candidates.length} fresh posts collected, ${evaluated} evaluated`,
+          "",
+          "**Why each candidate was rejected:**",
+          ...rejections.slice(0, 20).map((r) => `- u/${r.author} in r/${r.subreddit} — ${r.reason} (${r.url})`),
+          "",
+          "Widen the recency window or add subreddits in Mission settings and scan again.",
+        ].join("\n");
+
+    await logEvent("diagnostics", {
+      keywords: KEYWORDS,
+      subreddits: cfg.subreddits,
+      candidates: candidates.length,
+      evaluated,
+      leads,
+      rejections,
+    });
 
     await post({
       type: "final",
@@ -387,6 +404,7 @@ async function main() {
     });
     process.exitCode = 1;
   } finally {
+    await sleep(300);
     await browser?.close().catch(() => {});
   }
 }
