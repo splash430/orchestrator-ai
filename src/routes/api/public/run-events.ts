@@ -87,16 +87,20 @@ export const Route = createFileRoute("/api/public/run-events")({
               title: (p.title as string) ?? null,
               excerpt: (p.excerpt as string) ?? null,
               problem: (p.problem as string) ?? null,
+              summary: (p.summary as string) ?? null,
+              qualification_reason: (p.qualification_reason as string) ?? null,
               message: (p.message as string) ?? null,
               country_signal: (p.country_signal as string) ?? null,
               intent_score: (p.intent_score as number) ?? null,
-              status: "generated",
+              posted_at: (p.posted_at as string) ?? null,
+              status: "new",
             },
             { onConflict: "user_id,post_url", ignoreDuplicates: true },
           );
           if (error) console.error("prospect insert", error.message);
           return Response.json({ ok: true });
         }
+
 
         if (body.type === "final") {
           await supabaseAdmin
