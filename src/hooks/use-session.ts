@@ -2,31 +2,22 @@ import { useEffect, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
-let ensuring: Promise<void> | null = null;
-
-/** Makes sure there's always a session — no login screen needed. */
-async function ensureSession() {
-  const { data } = await supabase.auth.getSession();
-  if (data.session) return;
-  await supabase.auth.signInAnonymously();
-}
-
-/** undefined = loading, null = failed, string = user id */
+/** undefined = loading, null = signed out, string = user id */
 export function useSession() {
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
+  const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    ensuring = ensuring ?? ensureSession();
-    ensuring
-      .then(() => supabase.auth.getSession())
-      .then(({ data }) => {
-        if (alive) setUserId(data.session?.user.id ?? null);
-      })
-      .catch(() => alive && setUserId(null));
+    supabase.auth.getSession().then(({ data }) => {
+      if (!alive) return;
+      setUserId(data.session?.user.id ?? null);
+      setEmail(data.session?.user.email ?? null);
+    });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session?.user.id) setUserId(session.user.id);
+      setUserId(session?.user.id ?? null);
+      setEmail(session?.user.email ?? null);
     });
     return () => {
       alive = false;
@@ -34,5 +25,5 @@ export function useSession() {
     };
   }, []);
 
-  return { userId };
+  return { userId, email };
 }
