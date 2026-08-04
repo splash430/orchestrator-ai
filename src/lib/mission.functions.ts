@@ -15,10 +15,11 @@ export const DEFAULT_MISSION = {
     "Canadian business owners and entrepreneurs asking for AI tools, booking/appointment software, customer management or business automation",
   country: "Canada",
   max_contacts: 30,
-  duration_minutes: 40,
+  duration_minutes: 240,
   scans: 30,
   pace_per_minute: 1,
-  recency_minutes: 60,
+  contact_gap_seconds: 150,
+  recency_minutes: 180,
   subreddits: [
     "smallbusiness",
     "Entrepreneur",
