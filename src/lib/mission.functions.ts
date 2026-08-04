@@ -60,6 +60,7 @@ const MissionSchema = z.object({
   duration_minutes: z.number().int().min(1).max(240),
   scans: z.number().int().min(1).max(200),
   pace_per_minute: z.number().int().min(1).max(10),
+  contact_gap_seconds: z.number().int().min(15).max(3600),
   recency_minutes: z.number().int().min(5).max(1440),
   subreddits: z.array(z.string().min(1).max(40)).min(1).max(20),
   specifications: z.string().max(4000),
@@ -133,7 +134,7 @@ export const runMission = createServerFn({ method: "POST" })
 
     const command = [
       `Run mission: find ${mission.max_contacts} ${mission.country} prospects asking for ${mission.product_name}`,
-      `pace ${mission.pace_per_minute}/min, stop after ${mission.duration_minutes} min`,
+      `one reply every ${Math.round(Number(mission.contact_gap_seconds ?? 150) / 6) / 10} min, repeating for ${mission.duration_minutes} min`,
       data.extraInstructions ? `Extra: ${data.extraInstructions}` : "",
     ]
       .filter(Boolean)
@@ -162,6 +163,7 @@ export const runMission = createServerFn({ method: "POST" })
       duration_minutes: mission.duration_minutes,
       scans: mission.scans,
       pace_per_minute: mission.pace_per_minute,
+      contact_gap_seconds: mission.contact_gap_seconds,
       recency_minutes: mission.recency_minutes,
       subreddits: mission.subreddits,
       specifications: mission.specifications,

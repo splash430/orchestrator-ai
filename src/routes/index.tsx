@@ -366,13 +366,14 @@ function HomePage() {
               <Users className="size-3" /> {mission?.max_contacts ?? 30} leads max
             </span>
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="size-3" /> {mission?.duration_minutes ?? 40} min ·{" "}
-              {mission?.pace_per_minute ?? 1}/min
+              <Clock className="size-3" />{" "}
+              {Math.round(((mission?.duration_minutes ?? 240) / 60) * 10) / 10}h · 1 reply every{" "}
+              {Math.round((((mission as never as { contact_gap_seconds?: number })?.contact_gap_seconds ?? 150) / 6)) / 10} min
             </span>
           </div>
 
           <h1 className="mt-5 text-2xl font-semibold tracking-tight md:text-3xl">
-            Run your saved mission
+            Scan & Run — already set up
           </h1>
           <p className="mt-2 text-sm text-muted-foreground md:text-base">
             I scan Reddit for {mission?.country ?? "Canadian"} people who just asked for help with
@@ -396,7 +397,7 @@ function HomePage() {
               ) : (
                 <Play className="size-5" />
               )}
-              {running ? "Mission running…" : "Run Mission"}
+              {running ? "Scanning & contacting…" : "Scan & Run"}
             </Button>
             {activeRun && (
               <Button size="lg" variant="outline" className="gap-2" onClick={stop}>
