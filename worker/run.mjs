@@ -1,5 +1,5 @@
 // Runs inside GitHub Actions (workflow: .github/workflows/run-command.yml).
-// Executes the Claude tool-use loop directly, calling local Playwright for
+// Executes the Lovable AI tool-use loop directly, calling local Playwright for
 // browser tools, and streams every event back to the Lovable app via a
 // signed HTTPS callback. No long-running server needed.
 
