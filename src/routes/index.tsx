@@ -241,7 +241,7 @@ function Dashboard({ userId, email }: { userId: string; email: string | null }) 
   async function runSelfTest() {
     setTesting(true);
     try {
-      setSelftest(await selfTestFn({ data: {} }));
+      setSelftest(await selfTestFn());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
