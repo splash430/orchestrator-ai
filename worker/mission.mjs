@@ -75,6 +75,11 @@ const cfg = {
   subreddits: (mission.subreddits?.length ? mission.subreddits : DEFAULT_SUBS).slice(0, 24),
   specifications: mission.specifications || "",
   extra: mission.extra_instructions || "",
+  urls: Array.isArray(mission.reddit_urls) ? mission.reddit_urls.slice(0, 30) : [],
+  keywords: Array.isArray(mission.keywords) && mission.keywords.length ? mission.keywords.slice(0, 30) : KEYWORDS,
+  postLimit: clamp(Number(mission.post_limit) || 40, 10, 100),
+  sort: ["new", "hot", "top"].includes(mission.sort_order) ? mission.sort_order : "new",
+  writingStyle: mission.writing_style || "casual",
 };
 
 const SCANNERS = 40;
@@ -164,46 +169,59 @@ async function newScanner() {
   return { context, page: await context.newPage() };
 }
 
-async function fetchJson(page, url) {
-  const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  if (!res || !res.ok()) throw new Error(`reddit ${res?.status()}`);
-  return JSON.parse(await page.evaluate(() => document.body?.innerText || ""));
-}
-
-function normalise(children) {
-  return (children || [])
-    .map((c) => c.data)
-    .filter(Boolean)
-    .map((d) => ({
-      url: `https://www.reddit.com${d.permalink}`,
-      author: d.author,
-      subreddit: d.subreddit,
-      title: d.title || "",
-      body: (d.selftext || d.body || "").slice(0, 1500),
-      createdMs: (d.created_utc || 0) * 1000,
-    }))
-    .filter((p) => p.url && p.author && p.author !== "[deleted]");
+async function extractVisiblePosts(page, url) {
+  const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  if (!response || response.status() >= 400) throw new Error(`reddit ${response?.status()}`);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 1800);
+    await page.waitForTimeout(700);
+  }
+  return page.evaluate(() => {
+    const postElements = Array.from(document.querySelectorAll("shreddit-post, article, [data-testid='post-container']"));
+    const posts = postElements.map((element) => {
+      const link = element.querySelector("a[href*='/comments/']");
+      const href = link?.getAttribute("href") || element.getAttribute("permalink") || "";
+      const absolute = href ? new URL(href, location.origin).href : "";
+      const title = element.getAttribute("post-title") || element.querySelector("h1,h2,h3")?.textContent?.trim() || "";
+      const author = element.getAttribute("author") || element.querySelector("a[href*='/user/']")?.textContent?.trim()?.replace(/^u\//, "") || "";
+      const subreddit = element.getAttribute("subreddit-prefixed-name")?.replace(/^r\//, "") || absolute.match(/\/r\/([^/]+)/)?.[1] || "";
+      const time = element.querySelector("time")?.getAttribute("datetime") || "";
+      const visible = element.textContent?.trim() || "";
+      const comments = Array.from(element.querySelectorAll("shreddit-comment, [data-testid='comment']")).slice(0, 8).map((comment) => comment.textContent?.trim() || "").filter(Boolean);
+      const scoreText = element.getAttribute("score") || element.querySelector("[data-testid='post-score']")?.textContent?.trim() || "";
+      const commentText = element.getAttribute("comment-count") || "";
+      return { url: absolute, author, subreddit, title, body: visible.slice(0, 4000), comments, engagement: { score: scoreText, comments: commentText }, createdMs: time ? Date.parse(time) : Date.now() };
+    });
+    if (!posts.length && location.pathname.includes("/comments/")) {
+      const title = document.querySelector("h1")?.textContent?.trim() || document.title;
+      posts.push({ url: location.href, author: document.querySelector("a[href*='/user/']")?.textContent?.trim()?.replace(/^u\//, "") || "", subreddit: location.pathname.match(/\/r\/([^/]+)/)?.[1] || "", title, body: document.querySelector("main")?.textContent?.trim()?.slice(0, 4000) || "", comments: Array.from(document.querySelectorAll("shreddit-comment")).slice(0, 8).map((comment) => comment.textContent?.trim() || "").filter(Boolean), engagement: {}, createdMs: Date.now() });
+    }
+    return posts.filter((post) => post.url && post.title);
+  });
 }
 
 /** Builds >=40 independent search streams: keyword searches, subreddit feeds
  *  and keyword-scoped subreddit searches. */
 function buildStreams() {
   const streams = [];
-  for (const q of KEYWORDS) {
+  for (const input of cfg.urls) {
+    try {
+      const url = new URL(input);
+      url.searchParams.delete("raw_json");
+      streams.push({ label: `provided page ${url.pathname}`, url: url.href });
+    } catch {}
+  }
+  for (const q of cfg.keywords) {
     streams.push({
       label: `search "${q}"`,
-      url: `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&t=day&limit=50`,
-    });
-    streams.push({
-      label: `search "${q}" (recommendations)`,
-      url: `https://www.reddit.com/search.json?q=${encodeURIComponent(`${q} recommendations`)}&sort=new&t=day&limit=50`,
+      url: `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&sort=${cfg.sort}&t=day`,
     });
   }
   for (const sub of cfg.subreddits) {
-    streams.push({ label: `r/${sub} new`, url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=50` });
+    streams.push({ label: `r/${sub} ${cfg.sort}`, url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/${cfg.sort}/` });
     streams.push({
       label: `r/${sub} AI search`,
-      url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/search.json?q=${encodeURIComponent("AI automation OR chatbot OR automate")}&restrict_sr=1&sort=new&t=week&limit=50`,
+      url: `https://www.reddit.com/r/${encodeURIComponent(sub)}/search/?q=${encodeURIComponent("AI automation OR chatbot OR automate")}&restrict_sr=1&sort=${cfg.sort}&t=week`,
     });
   }
   return streams;
@@ -254,9 +272,9 @@ async function main() {
           if (i >= streams.length || Date.now() > HARD_DEADLINE) break;
           const s = streams[i];
           try {
-            const json = await fetchJson(page, s.url);
+            const extracted = await extractVisiblePosts(page, s.url);
             let fresh = 0;
-            for (const p of normalise(json?.data?.children)) {
+            for (const p of extracted) {
               if (seen.has(p.url)) continue;
               seen.add(p.url);
               if (p.createdMs && p.createdMs < cutoff) continue;
@@ -283,7 +301,7 @@ async function main() {
     await progress("qualifying");
 
     // Phase 2 — qualify in small parallel batches.
-    const queue = candidates.slice(0, 400);
+    const queue = candidates.slice(0, cfg.postLimit);
     let qcursor = 0;
     const qualifiers = Array.from({ length: 6 }, async () => {
       while (true) {
@@ -328,7 +346,13 @@ async function main() {
             subreddit: p.subreddit,
             title: p.title.slice(0, 300),
             excerpt: p.body.slice(0, 600),
+             post_content: p.body,
+             comments: p.comments,
+             engagement: p.engagement,
             summary: String(v.summary || "").slice(0, 400),
+             ai_summary: String(v.summary || "").slice(0, 600),
+             recommended_solution: cfg.productName,
+             intent_level: Number(v.intent_score) >= 75 ? "high" : Number(v.intent_score) >= 45 ? "medium" : "low",
             qualification_reason: String(v.qualification_reason || "").slice(0, 400),
             problem: String(v.summary || "").slice(0, 300),
             country_signal: String(v.country_signal || "").slice(0, 200),

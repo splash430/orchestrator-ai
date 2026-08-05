@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as OpportunitiesRouteImport } from './routes/opportunities'
+import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWireGithubRouteImport } from './routes/api/public/wire-github'
 import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
@@ -20,9 +23,24 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpportunitiesRoute = OpportunitiesRouteImport.update({
+  id: '/opportunities',
+  path: '/opportunities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeadsRoute = LeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,14 +61,20 @@ const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/leads': typeof LeadsRoute
+  '/opportunities': typeof OpportunitiesRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/leads': typeof LeadsRoute
+  '/opportunities': typeof OpportunitiesRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
@@ -58,7 +82,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/leads': typeof LeadsRoute
+  '/opportunities': typeof OpportunitiesRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/scanner': typeof ScannerRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
@@ -67,21 +94,30 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/leads'
+    | '/opportunities'
     | '/reset-password'
+    | '/scanner'
     | '/settings'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/leads'
+    | '/opportunities'
     | '/reset-password'
+    | '/scanner'
     | '/settings'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   id:
     | '__root__'
     | '/'
+    | '/leads'
+    | '/opportunities'
     | '/reset-password'
+    | '/scanner'
     | '/settings'
     | '/api/public/run-events'
     | '/api/public/wire-github'
@@ -89,7 +125,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LeadsRoute: typeof LeadsRoute
+  OpportunitiesRoute: typeof OpportunitiesRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ScannerRoute: typeof ScannerRoute
   SettingsRoute: typeof SettingsRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
   ApiPublicWireGithubRoute: typeof ApiPublicWireGithubRoute
@@ -104,11 +143,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scanner': {
+      id: '/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof ScannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/opportunities': {
+      id: '/opportunities'
+      path: '/opportunities'
+      fullPath: '/opportunities'
+      preLoaderRoute: typeof OpportunitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leads': {
+      id: '/leads'
+      path: '/leads'
+      fullPath: '/leads'
+      preLoaderRoute: typeof LeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -137,7 +197,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LeadsRoute: LeadsRoute,
+  OpportunitiesRoute: OpportunitiesRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ScannerRoute: ScannerRoute,
   SettingsRoute: SettingsRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
   ApiPublicWireGithubRoute: ApiPublicWireGithubRoute,
