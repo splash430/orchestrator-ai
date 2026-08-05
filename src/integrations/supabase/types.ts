@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      leads: {
+        Row: {
+          created_at: string
+          date_discovered: string
+          id: string
+          notes: string
+          post_url: string
+          problem: string | null
+          prospect_id: string | null
+          reddit_username: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_discovered?: string
+          id?: string
+          notes?: string
+          post_url: string
+          problem?: string | null
+          prospect_id?: string | null
+          reddit_username?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_discovered?: string
+          id?: string
+          notes?: string
+          post_url?: string
+          problem?: string | null
+          prospect_id?: string | null
+          reddit_username?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memories: {
         Row: {
           category: string
@@ -90,16 +140,22 @@ export type Database = {
           created_at: string
           duration_minutes: number
           id: string
+          industries: string[]
+          keywords: string[]
           max_contacts: number
           pace_per_minute: number
+          post_limit: number
           product_name: string
           product_url: string
           recency_minutes: number
+          reddit_urls: string[]
           scans: number
+          sort_order: string
           specifications: string
           subreddits: string[]
           updated_at: string
           user_id: string
+          writing_style: string
         }
         Insert: {
           audience?: string
@@ -108,16 +164,22 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          industries?: string[]
+          keywords?: string[]
           max_contacts?: number
           pace_per_minute?: number
+          post_limit?: number
           product_name?: string
           product_url?: string
           recency_minutes?: number
+          reddit_urls?: string[]
           scans?: number
+          sort_order?: string
           specifications?: string
           subreddits?: string[]
           updated_at?: string
           user_id: string
+          writing_style?: string
         }
         Update: {
           audience?: string
@@ -126,37 +188,54 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          industries?: string[]
+          keywords?: string[]
           max_contacts?: number
           pace_per_minute?: number
+          post_limit?: number
           product_name?: string
           product_url?: string
           recency_minutes?: number
+          reddit_urls?: string[]
           scans?: number
+          sort_order?: string
           specifications?: string
           subreddits?: string[]
           updated_at?: string
           user_id?: string
+          writing_style?: string
         }
         Relationships: []
       }
       prospects: {
         Row: {
+          ai_summary: string | null
           approved_at: string | null
+          approved_reply: string | null
           author: string | null
+          comments: Json
+          contacted_at: string | null
           country_signal: string | null
           created_at: string
           drafted_at: string | null
+          engagement: Json
           excerpt: string | null
           id: string
+          ignored_at: string | null
+          intent_level: string | null
           intent_score: number | null
           message: string | null
+          post_content: string | null
           post_url: string
           posted_at: string | null
           problem: string | null
           qualification_reason: string | null
+          recommended_solution: string | null
           rejected: boolean
           rejection_reason: string | null
+          reply_options: Json
           run_id: string | null
+          saved: boolean
           source: string
           status: string
           subreddit: string | null
@@ -165,22 +244,33 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_summary?: string | null
           approved_at?: string | null
+          approved_reply?: string | null
           author?: string | null
+          comments?: Json
+          contacted_at?: string | null
           country_signal?: string | null
           created_at?: string
           drafted_at?: string | null
+          engagement?: Json
           excerpt?: string | null
           id?: string
+          ignored_at?: string | null
+          intent_level?: string | null
           intent_score?: number | null
           message?: string | null
+          post_content?: string | null
           post_url: string
           posted_at?: string | null
           problem?: string | null
           qualification_reason?: string | null
+          recommended_solution?: string | null
           rejected?: boolean
           rejection_reason?: string | null
+          reply_options?: Json
           run_id?: string | null
+          saved?: boolean
           source?: string
           status?: string
           subreddit?: string | null
@@ -189,22 +279,33 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_summary?: string | null
           approved_at?: string | null
+          approved_reply?: string | null
           author?: string | null
+          comments?: Json
+          contacted_at?: string | null
           country_signal?: string | null
           created_at?: string
           drafted_at?: string | null
+          engagement?: Json
           excerpt?: string | null
           id?: string
+          ignored_at?: string | null
+          intent_level?: string | null
           intent_score?: number | null
           message?: string | null
+          post_content?: string | null
           post_url?: string
           posted_at?: string | null
           problem?: string | null
           qualification_reason?: string | null
+          recommended_solution?: string | null
           rejected?: boolean
           rejection_reason?: string | null
+          reply_options?: Json
           run_id?: string | null
+          saved?: boolean
           source?: string
           status?: string
           subreddit?: string | null
