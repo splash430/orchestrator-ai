@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWireGithubRouteImport } from './routes/api/public/wire-github'
 import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-events'
@@ -17,6 +18,11 @@ import { Route as ApiPublicRunEventsRouteImport } from './routes/api/public/run-
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,12 +43,14 @@ const ApiPublicRunEventsRoute = ApiPublicRunEventsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/api/public/run-events': typeof ApiPublicRunEventsRoute
   '/api/public/wire-github': typeof ApiPublicWireGithubRoute
@@ -58,14 +67,21 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/reset-password'
     | '/settings'
     | '/api/public/run-events'
     | '/api/public/wire-github'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/api/public/run-events' | '/api/public/wire-github'
+  to:
+    | '/'
+    | '/reset-password'
+    | '/settings'
+    | '/api/public/run-events'
+    | '/api/public/wire-github'
   id:
     | '__root__'
     | '/'
+    | '/reset-password'
     | '/settings'
     | '/api/public/run-events'
     | '/api/public/wire-github'
@@ -73,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   ApiPublicRunEventsRoute: typeof ApiPublicRunEventsRoute
   ApiPublicWireGithubRoute: typeof ApiPublicWireGithubRoute
@@ -85,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -113,6 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   ApiPublicRunEventsRoute: ApiPublicRunEventsRoute,
   ApiPublicWireGithubRoute: ApiPublicWireGithubRoute,
@@ -120,13 +145,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
