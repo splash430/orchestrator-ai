@@ -16,6 +16,7 @@ export function useSession() {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (!alive) return;
       setUserId(session?.user.id ?? null);
       setEmail(session?.user.email ?? null);
     });
