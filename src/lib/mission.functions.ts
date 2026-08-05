@@ -35,6 +35,12 @@ export const DEFAULT_MISSION = {
     "msp",
   ],
   specifications: "",
+  reddit_urls: ["https://www.reddit.com/r/smallbusiness", "https://www.reddit.com/r/Entrepreneur"],
+  keywords: ["automation", "AI agent", "workflow", "CRM", "manual process", "repetitive tasks"],
+  industries: [] as string[],
+  writing_style: "casual" as "professional" | "casual" | "technical",
+  post_limit: 40 as 10 | 25 | 40 | 50 | 70 | 100,
+  sort_order: "new" as "new" | "hot" | "top",
 };
 
 export type Mission = typeof DEFAULT_MISSION & { id?: string };
@@ -64,6 +70,12 @@ const MissionSchema = z.object({
   recency_minutes: z.number().int().min(5).max(1440),
   subreddits: z.array(z.string().min(1).max(40)).min(1).max(20),
   specifications: z.string().max(4000),
+  reddit_urls: z.array(z.string().url()).min(1).max(30).refine((urls) => urls.every((url) => { try { const host = new URL(url).hostname.toLowerCase(); return host === "reddit.com" || host.endsWith(".reddit.com"); } catch { return false; } }), "Only Reddit URLs are allowed"),
+  keywords: z.array(z.string().min(1).max(80)).max(30),
+  industries: z.array(z.string().min(1).max(80)).max(20),
+  writing_style: z.enum(["professional", "casual", "technical"]),
+  post_limit: z.union([z.literal(10), z.literal(25), z.literal(40), z.literal(50), z.literal(70), z.literal(100)]),
+  sort_order: z.enum(["new", "hot", "top"]),
 });
 
 /** Reads the saved mission, creating the default one on first use. */
@@ -167,6 +179,12 @@ export const runMission = createServerFn({ method: "POST" })
       recency_minutes: mission.recency_minutes,
       subreddits: mission.subreddits,
       specifications: mission.specifications,
+      reddit_urls: mission.reddit_urls,
+      keywords: mission.keywords,
+      industries: mission.industries,
+      writing_style: mission.writing_style,
+      post_limit: mission.post_limit,
+      sort_order: mission.sort_order,
       extra_instructions: data.extraInstructions ?? "",
     };
 

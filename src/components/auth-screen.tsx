@@ -1,4 +1,4 @@
-import { Loader2, Target } from "lucide-react";
+import { Crosshair, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,19 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  async function resetPassword() {
+    if (!email) {
+      setError("Enter your email first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+    setBusy(false);
+    if (error) setError(error.message);
+    else setNotice("Check your email for a password reset link.");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,10 +55,10 @@ export function AuthScreen() {
     <div className="grid min-h-screen place-items-center bg-background px-4 text-foreground">
       <div className="surface w-full max-w-sm p-7">
         <div className="flex items-center gap-2">
-          <div className="brand-gradient grid size-8 place-items-center rounded-lg text-primary-foreground">
-            <Target className="size-4" />
+          <div className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
+            <Crosshair className="size-4" />
           </div>
-          <span className="font-semibold tracking-tight">Reddit Job Finder</span>
+          <span className="font-semibold">AI Opportunity Finder</span>
         </div>
         <h1 className="mt-5 text-xl font-semibold tracking-tight">
           {mode === "signin" ? "Sign in" : "Create your account"}
@@ -62,7 +75,7 @@ export function AuthScreen() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@company.com"
-            className="w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-primary"
+            className="w-full rounded-md border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-primary"
           />
           <input
             type="password"
@@ -72,7 +85,7 @@ export function AuthScreen() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password (8+ characters)"
-            className="w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-primary"
+            className="w-full rounded-md border bg-transparent px-3 py-2.5 text-sm outline-none focus:border-primary"
           />
           <Button type="submit" className="w-full gap-2" disabled={busy}>
             {busy && <Loader2 className="size-4 animate-spin" />}
@@ -82,6 +95,8 @@ export function AuthScreen() {
 
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
         {notice && <p className="mt-3 text-sm text-muted-foreground">{notice}</p>}
+
+        {mode === "signin" && <Button type="button" variant="link" className="mt-3 h-auto p-0 text-sm" onClick={resetPassword}>Forgot password?</Button>}
 
         <button
           onClick={() => {
