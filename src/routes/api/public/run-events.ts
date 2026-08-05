@@ -63,6 +63,17 @@ export const Route = createFileRoute("/api/public/run-events")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: run } = await supabaseAdmin
+          .from("runs")
+          .select("id, user_id, thread_id, status")
+          .eq("id", body.runId)
+          .eq("user_id", body.userId)
+          .eq("thread_id", body.threadId)
+          .maybeSingle();
+        if (!run) return new Response("run ownership mismatch", { status: 403 });
+        if (["succeeded", "failed", "stopped"].includes(run.status) && body.type !== "final") {
+          return new Response("run is closed", { status: 409 });
+        }
 
         if (body.type === "event") {
           await supabaseAdmin.from("run_events").insert({
@@ -86,14 +97,14 @@ export const Route = createFileRoute("/api/public/run-events")({
               subreddit: (p.subreddit as string) ?? null,
               title: (p.title as string) ?? null,
               excerpt: (p.excerpt as string) ?? null,
-               post_content: (p.post_content as string) ?? null,
-               comments: (p.comments as never) ?? [],
-               engagement: (p.engagement as never) ?? {},
+              post_content: (p.post_content as string) ?? null,
+              comments: (p.comments as never) ?? [],
+              engagement: (p.engagement as never) ?? {},
               problem: (p.problem as string) ?? null,
               summary: (p.summary as string) ?? null,
-               ai_summary: (p.ai_summary as string) ?? null,
-               recommended_solution: (p.recommended_solution as string) ?? null,
-               intent_level: (p.intent_level as string) ?? null,
+              ai_summary: (p.ai_summary as string) ?? null,
+              recommended_solution: (p.recommended_solution as string) ?? null,
+              intent_level: (p.intent_level as string) ?? null,
               qualification_reason: (p.qualification_reason as string) ?? null,
               message: (p.message as string) ?? null,
               country_signal: (p.country_signal as string) ?? null,
@@ -116,7 +127,9 @@ export const Route = createFileRoute("/api/public/run-events")({
               result: body.text ? { text: body.text } : null,
               error: body.error ?? null,
             })
-            .eq("id", body.runId);
+            .eq("id", body.runId)
+            .eq("user_id", body.userId)
+            .eq("thread_id", body.threadId);
 
           if (body.status === "succeeded" && body.text) {
             await supabaseAdmin.from("messages").insert({
@@ -136,7 +149,8 @@ export const Route = createFileRoute("/api/public/run-events")({
           await supabaseAdmin
             .from("threads")
             .update({ updated_at: new Date().toISOString() })
-            .eq("id", body.threadId);
+            .eq("id", body.threadId)
+            .eq("user_id", body.userId);
           return Response.json({ ok: true });
         }
 

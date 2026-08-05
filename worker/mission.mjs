@@ -10,6 +10,11 @@
 import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 
+// Safety invariant: this worker discovers and analyzes only. Reddit posting is
+// intentionally impossible in this workflow; the final Comment click is human-only.
+const ALLOW_REDDIT_POSTING = false;
+if (ALLOW_REDDIT_POSTING) throw new Error("Automated Reddit posting is disabled by design");
+
 const {
   LOVABLE_API_KEY,
   WORKFLOW_CALLBACK_SECRET,
