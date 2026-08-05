@@ -96,18 +96,20 @@ export function AuthScreen() {
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
         {notice && <p className="mt-3 text-sm text-muted-foreground">{notice}</p>}
 
-        {mode === "signin" && <Button type="button" variant="link" className="mt-3 h-auto p-0 text-sm" onClick={resetPassword}>Forgot password?</Button>}
-
-        <button
-          onClick={() => {
-            setMode(mode === "signin" ? "signup" : "signin");
-            setError(null);
-            setNotice(null);
-          }}
-          className="mt-5 text-sm text-muted-foreground underline decoration-dotted underline-offset-4"
-        >
-          {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-        </button>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          {mode === "signin" && <Button type="button" variant="link" className="h-auto p-0 text-sm" onClick={resetPassword}>Forgot password?</Button>}
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === "signin" ? "signup" : "signin");
+              setError(null);
+              setNotice(null);
+            }}
+            className="text-sm text-muted-foreground underline decoration-dotted underline-offset-4"
+          >
+            {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+          </button>
+        </div>
       </div>
     </div>
   );
