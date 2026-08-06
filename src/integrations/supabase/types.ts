@@ -207,6 +207,84 @@ export type Database = {
         }
         Relationships: []
       }
+      outreach_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          logs: Json
+          message: string
+          prospect_id: string | null
+          result: string | null
+          scheduled_at: string
+          screenshot_path: string | null
+          started_at: string | null
+          status: string
+          target_url: string
+          updated_at: string
+          user_id: string
+          website_lead_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          logs?: Json
+          message: string
+          prospect_id?: string | null
+          result?: string | null
+          scheduled_at?: string
+          screenshot_path?: string | null
+          started_at?: string | null
+          status?: string
+          target_url: string
+          updated_at?: string
+          user_id: string
+          website_lead_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          logs?: Json
+          message?: string
+          prospect_id?: string | null
+          result?: string | null
+          scheduled_at?: string
+          screenshot_path?: string | null
+          started_at?: string | null
+          status?: string
+          target_url?: string
+          updated_at?: string
+          user_id?: string
+          website_lead_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_queue_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_queue_website_lead_id_fkey"
+            columns: ["website_lead_id"]
+            isOneToOne: false
+            referencedRelation: "website_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           ai_summary: string | null
@@ -224,7 +302,9 @@ export type Database = {
           ignored_at: string | null
           intent_level: string | null
           intent_score: number | null
+          location: string | null
           message: string | null
+          platform: string
           post_content: string | null
           post_url: string
           posted_at: string | null
@@ -236,9 +316,11 @@ export type Database = {
           reply_options: Json
           run_id: string | null
           saved: boolean
+          scan_job_id: string | null
           source: string
           status: string
           subreddit: string | null
+          suggested_offer: string | null
           summary: string | null
           title: string | null
           user_id: string
@@ -259,7 +341,9 @@ export type Database = {
           ignored_at?: string | null
           intent_level?: string | null
           intent_score?: number | null
+          location?: string | null
           message?: string | null
+          platform?: string
           post_content?: string | null
           post_url: string
           posted_at?: string | null
@@ -271,9 +355,11 @@ export type Database = {
           reply_options?: Json
           run_id?: string | null
           saved?: boolean
+          scan_job_id?: string | null
           source?: string
           status?: string
           subreddit?: string | null
+          suggested_offer?: string | null
           summary?: string | null
           title?: string | null
           user_id: string
@@ -294,7 +380,9 @@ export type Database = {
           ignored_at?: string | null
           intent_level?: string | null
           intent_score?: number | null
+          location?: string | null
           message?: string | null
+          platform?: string
           post_content?: string | null
           post_url?: string
           posted_at?: string | null
@@ -306,9 +394,11 @@ export type Database = {
           reply_options?: Json
           run_id?: string | null
           saved?: boolean
+          scan_job_id?: string | null
           source?: string
           status?: string
           subreddit?: string | null
+          suggested_offer?: string | null
           summary?: string | null
           title?: string | null
           user_id?: string
@@ -319,6 +409,13 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_scan_job_id_fkey"
+            columns: ["scan_job_id"]
+            isOneToOne: false
+            referencedRelation: "scan_jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -402,6 +499,60 @@ export type Database = {
           },
         ]
       }
+      scan_jobs: {
+        Row: {
+          actor_id: string
+          apify_run_id: string | null
+          config: Json
+          created_at: string
+          dataset_id: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          items_collected: number
+          opportunities_created: number
+          source: string
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actor_id: string
+          apify_run_id?: string | null
+          config?: Json
+          created_at?: string
+          dataset_id?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          items_collected?: number
+          opportunities_created?: number
+          source?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actor_id?: string
+          apify_run_id?: string | null
+          config?: Json
+          created_at?: string
+          dataset_id?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          items_collected?: number
+          opportunities_created?: number
+          source?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       threads: {
         Row: {
           created_at: string
@@ -425,6 +576,95 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      website_leads: {
+        Row: {
+          ai_summary: string | null
+          approved_reply: string | null
+          company_name: string | null
+          contact_page: string | null
+          created_at: string
+          email: string | null
+          excerpt: string | null
+          id: string
+          industry: string | null
+          intent_level: string | null
+          location: string | null
+          phone: string | null
+          problem: string | null
+          recommended_solution: string | null
+          reply_options: Json
+          scan_job_id: string | null
+          score: number | null
+          social_links: Json
+          status: string
+          suggested_offer: string | null
+          technologies: Json
+          updated_at: string
+          user_id: string
+          website: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          approved_reply?: string | null
+          company_name?: string | null
+          contact_page?: string | null
+          created_at?: string
+          email?: string | null
+          excerpt?: string | null
+          id?: string
+          industry?: string | null
+          intent_level?: string | null
+          location?: string | null
+          phone?: string | null
+          problem?: string | null
+          recommended_solution?: string | null
+          reply_options?: Json
+          scan_job_id?: string | null
+          score?: number | null
+          social_links?: Json
+          status?: string
+          suggested_offer?: string | null
+          technologies?: Json
+          updated_at?: string
+          user_id: string
+          website: string
+        }
+        Update: {
+          ai_summary?: string | null
+          approved_reply?: string | null
+          company_name?: string | null
+          contact_page?: string | null
+          created_at?: string
+          email?: string | null
+          excerpt?: string | null
+          id?: string
+          industry?: string | null
+          intent_level?: string | null
+          location?: string | null
+          phone?: string | null
+          problem?: string | null
+          recommended_solution?: string | null
+          reply_options?: Json
+          scan_job_id?: string | null
+          score?: number | null
+          social_links?: Json
+          status?: string
+          suggested_offer?: string | null
+          technologies?: Json
+          updated_at?: string
+          user_id?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_leads_scan_job_id_fkey"
+            columns: ["scan_job_id"]
+            isOneToOne: false
+            referencedRelation: "scan_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       worker_settings: {
         Row: {
