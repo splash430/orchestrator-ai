@@ -192,10 +192,11 @@ export const retryScanJob = createServerFn({ method: "POST" })
 
     const { REDDIT_ACTOR, WEBSITE_ACTOR, redditActorInput, websiteActorInput, startActorRun } =
       await import("./apify.server");
-    const config = (job.config ?? {}) as Record<string, never>;
     const isReddit = job.source === "reddit";
     const actor = isReddit ? REDDIT_ACTOR : WEBSITE_ACTOR;
-    const input = isReddit ? redditActorInput(config) : websiteActorInput(config);
+    const input = isReddit
+      ? redditActorInput(RedditScanInput.parse(job.config))
+      : websiteActorInput(WebsiteScanInput.parse(job.config));
 
     const { data: retry, error: insertError } = await context.supabase
       .from("scan_jobs")
